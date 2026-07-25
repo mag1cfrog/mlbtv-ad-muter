@@ -81,7 +81,6 @@ type TabMuteState = Readonly<{
   tabMuted: boolean;
   muteSource: MuteSource;
   mutedByExtension: boolean;
-  wasMutedBeforeAd: boolean;
 }>;
 
 type DecideMuteActionInput = Readonly<{
@@ -171,7 +170,6 @@ type TabAudioStateMessage = Readonly<{
   type: "tab-audio-state";
   enabled: boolean;
   tabMuted: boolean | null | undefined;
-  mutedByExtension: boolean;
   manualAdOverride: boolean;
   muteSource: MuteSource;
 }>;
@@ -200,7 +198,6 @@ type DetectorDebugEvent = Readonly<{
   decision: MuteAction;
   decisionReason: MuteDecision["reason"];
   mutedByExtension: boolean;
-  wasMutedBeforeAd: boolean;
   tabMuted: boolean | null | undefined;
   muteSource: MuteSource | undefined;
   signals: DetectorSignals;
@@ -249,7 +246,6 @@ type TabSessionRecord = {
   tabMuted?: boolean | null;
   muteSource?: MuteSource;
   mutedByExtension?: boolean;
-  wasMutedBeforeAd?: boolean;
   manualAdOverride?: boolean;
   adMuteLatched?: boolean;
   lastDecision?: MuteAction | NavigationDecision;

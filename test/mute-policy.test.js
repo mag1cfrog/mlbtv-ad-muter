@@ -165,8 +165,7 @@ test("derives mute ownership from Chrome's actual tab state", () => {
     {
       tabMuted: true,
       muteSource: "this-extension",
-      mutedByExtension: true,
-      wasMutedBeforeAd: false
+      mutedByExtension: true
     }
   );
 
@@ -182,8 +181,7 @@ test("derives mute ownership from Chrome's actual tab state", () => {
     {
       tabMuted: false,
       muteSource: "this-extension",
-      mutedByExtension: false,
-      wasMutedBeforeAd: false
+      mutedByExtension: false
     }
   );
 });

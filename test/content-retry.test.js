@@ -91,7 +91,6 @@ test("retries a stable ad state until tab mute is acknowledged", async () => {
             type: "tab-audio-state",
             enabled: true,
             tabMuted: acknowledged,
-            mutedByExtension: acknowledged,
             manualAdOverride: false,
             muteSource: acknowledged ? "this-extension" : "unknown"
           });

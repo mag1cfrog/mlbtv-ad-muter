@@ -86,7 +86,6 @@ function createTabAudioStateMessage(
     type: "tab-audio-state",
     enabled,
     tabMuted: record.tabMuted,
-    mutedByExtension: Boolean(record.mutedByExtension),
     manualAdOverride: Boolean(record.manualAdOverride),
     muteSource: record.muteSource || "unknown"
   };
@@ -149,8 +148,7 @@ async function ensureMuted(
   await chrome.tabs.update(tabId, { muted: true });
   return {
     ...record,
-    mutedByExtension: true,
-    wasMutedBeforeAd: false
+    mutedByExtension: true
   };
 }
 
@@ -181,8 +179,7 @@ async function releaseMute(
 
   return {
     ...record,
-    mutedByExtension: false,
-    wasMutedBeforeAd: false
+    mutedByExtension: false
   };
 }
 
@@ -205,7 +202,6 @@ function addDebugEvent(
     decision: decision.action,
     decisionReason: decision.reason,
     mutedByExtension: Boolean(record.mutedByExtension),
-    wasMutedBeforeAd: Boolean(record.wasMutedBeforeAd),
     tabMuted: record.tabMuted,
     muteSource: record.muteSource,
     signals: message.signals

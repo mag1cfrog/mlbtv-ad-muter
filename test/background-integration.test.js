@@ -178,7 +178,7 @@ test("coordinates ad muting, manual override, and navigation release", async () 
 
   let response = await sendDetectorState("ad");
   assert.equal(response.tabMuted, true);
-  assert.equal(response.mutedByExtension, true);
+  assert.equal(tab.mutedInfo.extensionId, runtimeId);
 
   const userUnmute = {
     muted: false,

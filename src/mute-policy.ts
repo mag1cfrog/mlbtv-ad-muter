@@ -76,9 +76,7 @@
       tabMuted,
       muteSource,
       mutedByExtension:
-        tabMuted && muteSource === "this-extension",
-      wasMutedBeforeAd:
-        tabMuted && muteSource !== "this-extension"
+        tabMuted && muteSource === "this-extension"
     };
   }
 

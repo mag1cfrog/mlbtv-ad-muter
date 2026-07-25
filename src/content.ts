@@ -6,7 +6,6 @@ type OverlayElements = Readonly<{
 
 type ContentTabAudioState = {
   tabMuted: boolean;
-  mutedByExtension: boolean;
   manualAdOverride: boolean;
   muteSource: MuteSource;
 };
@@ -49,7 +48,6 @@ type ContentTabAudioState = {
   let monitorStopped = false;
   let tabAudioState: ContentTabAudioState = {
     tabMuted: false,
-    mutedByExtension: false,
     manualAdOverride: false,
     muteSource: "unknown"
   };
@@ -487,7 +485,6 @@ type ContentTabAudioState = {
     autoMuteEnabled = message.enabled === true;
     tabAudioState = {
       tabMuted: message.tabMuted === true,
-      mutedByExtension: message.mutedByExtension === true,
       manualAdOverride: message.manualAdOverride === true,
       muteSource: message.muteSource || "unknown"
     };
