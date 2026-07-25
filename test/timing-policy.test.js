@@ -4,7 +4,8 @@ const test = require("node:test");
 const assert = require("node:assert/strict");
 const {
   TIMING_MS,
-  holdFor
+  holdFor,
+  muteRetryDelay
 } = require("../src/timing-policy.js");
 
 test("confirms the explicit commercial marker quickly", () => {
@@ -39,6 +40,14 @@ test("requires two seconds of stable content before unmuting", () => {
 
 test("keeps the watchdog interval at 1.5 seconds", () => {
   assert.equal(TIMING_MS.watchdog, 1500);
+});
+
+test("retries an unacknowledged mute quickly with a bounded backoff", () => {
+  assert.equal(muteRetryDelay(0), 500);
+  assert.equal(muteRetryDelay(1), 1000);
+  assert.equal(muteRetryDelay(2), 1500);
+  assert.equal(muteRetryDelay(20), 1500);
+  assert.equal(muteRetryDelay(-1), 500);
 });
 
 test("debounces mutation bursts for 80 milliseconds", () => {

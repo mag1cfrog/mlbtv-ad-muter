@@ -51,16 +51,23 @@ async function getTabMuteState(tabId) {
   }
 }
 
+function createTabAudioStateMessage(record, enabled) {
+  return {
+    type: "tab-audio-state",
+    enabled,
+    tabMuted: record.tabMuted,
+    mutedByExtension: Boolean(record.mutedByExtension),
+    manualAdOverride: Boolean(record.manualAdOverride),
+    muteSource: record.muteSource || "unknown"
+  };
+}
+
 async function notifyTabAudioState(tabId, record, enabled) {
   try {
-    await chrome.tabs.sendMessage(tabId, {
-      type: "tab-audio-state",
-      enabled,
-      tabMuted: record.tabMuted,
-      mutedByExtension: Boolean(record.mutedByExtension),
-      manualAdOverride: Boolean(record.manualAdOverride),
-      muteSource: record.muteSource || "unknown"
-    });
+    await chrome.tabs.sendMessage(
+      tabId,
+      createTabAudioStateMessage(record, enabled)
+    );
   } catch {
     // The content script may not be available during navigation.
   }
@@ -270,6 +277,7 @@ async function handleDetectorState(tabId, message) {
   await setSessionRecord(tabId, next);
   await setBadge(tabId, next, settings.enabled);
   await notifyTabAudioState(tabId, next, settings.enabled);
+  return createTabAudioStateMessage(next, settings.enabled);
 }
 
 function queueTabTask(tabId, task) {
@@ -391,8 +399,16 @@ chrome.runtime.onInstalled.addListener(async () => {
 
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   if (message?.type === "detector-state" && sender.tab?.id) {
-    queueDetectorState(sender.tab.id, message).catch(console.error);
-    return false;
+    queueDetectorState(sender.tab.id, message)
+      .then(sendResponse)
+      .catch((error) => {
+        console.error(error);
+        sendResponse({
+          type: "detector-error",
+          error: error.message
+        });
+      });
+    return true;
   }
 
   if (message?.type === "get-popup-state" && Number.isInteger(message.tabId)) {

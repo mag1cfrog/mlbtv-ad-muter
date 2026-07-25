@@ -15,8 +15,19 @@
     heuristicAd: 900,
     content: 2000,
     unknown: 1200,
+    muteAcknowledgment: 500,
+    muteRetryMaximum: 1500,
     watchdog: 1500
   });
+
+  function muteRetryDelay(attempt) {
+    const safeAttempt = Math.max(0, Math.min(attempt, 10));
+
+    return Math.min(
+      TIMING_MS.muteAcknowledgment * (2 ** safeAttempt),
+      TIMING_MS.muteRetryMaximum
+    );
+  }
 
   function holdFor(inspection) {
     if (
@@ -39,6 +50,7 @@
 
   return Object.freeze({
     TIMING_MS,
-    holdFor
+    holdFor,
+    muteRetryDelay
   });
 });

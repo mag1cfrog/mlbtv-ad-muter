@@ -71,6 +71,10 @@ enough to skip a mute operation. If an extension-originated unmute occurs while
 the stable state is still `ad`, the background worker repairs it. A manual
 Chrome tab unmute is respected for the remainder of the current ad pod, while
 the next content-to-ad transition enables automatic muting again.
+Each detector request now returns Chrome's confirmed tab-audio state directly
+to the page monitor. If a stable commercial state remains audible because that
+request or acknowledgment failed, the monitor retries after 500 milliseconds
+and backs off to at most one retry every 1.5 seconds until mute is confirmed.
 
 The explicit commercial-controls marker is confirmed for 300 milliseconds.
 The weaker minimal-controls fallback is confirmed for 900 milliseconds.

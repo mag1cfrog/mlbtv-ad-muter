@@ -4,6 +4,7 @@
   const detector = globalThis.BaseballBreakDetector;
   const overlayPolicy = globalThis.BaseballBreakOverlayPolicy;
   const timingPolicy = globalThis.BaseballBreakTimingPolicy;
+  const extensionVersion = chrome.runtime.getManifest().version;
 
   if (!detector || !overlayPolicy || !timingPolicy) {
     console.error("Baseball Break Muter: detector dependencies failed to load.");
@@ -14,6 +15,8 @@
   let candidateClassification = null;
   let candidateSince = 0;
   let evaluationTimer = null;
+  let muteRetryTimer = null;
+  let muteRetryAttempt = 0;
   let watchdogTimer = null;
   let lastMessageFingerprint = "";
   let observedTarget = null;
@@ -32,6 +35,50 @@
     manualAdOverride: false,
     muteSource: "unknown"
   };
+
+  function isMuteAcknowledgmentPending() {
+    return (
+      autoMuteEnabled &&
+      stableClassification === "ad" &&
+      !tabAudioState.tabMuted &&
+      !tabAudioState.manualAdOverride
+    );
+  }
+
+  function clearMuteRetry() {
+    if (muteRetryTimer !== null) {
+      clearTimeout(muteRetryTimer);
+      muteRetryTimer = null;
+    }
+    muteRetryAttempt = 0;
+  }
+
+  function scheduleMuteRetry() {
+    if (
+      monitorStopped ||
+      muteRetryTimer !== null ||
+      !isMuteAcknowledgmentPending()
+    ) {
+      return;
+    }
+
+    const delayMs = timingPolicy.muteRetryDelay(muteRetryAttempt);
+    muteRetryTimer = setTimeout(() => {
+      muteRetryTimer = null;
+      muteRetryAttempt += 1;
+      lastMessageFingerprint = "";
+      evaluatePlayer();
+    }, delayMs);
+  }
+
+  function reconcileMuteRetry() {
+    if (isMuteAcknowledgmentPending()) {
+      scheduleMuteRetry();
+      return;
+    }
+
+    clearMuteRetry();
+  }
 
   function scheduleEvaluation(delayMs = timingPolicy.TIMING_MS.debounce) {
     if (monitorStopped) {
@@ -196,6 +243,8 @@
         label = "AD · MUTED";
       } else if (tabAudioState.manualAdOverride) {
         label = "AD · OVERRIDE";
+      } else if (muteRetryAttempt > 0) {
+        label = "AD · RETRYING";
       } else if (autoMuteEnabled) {
         label = "AD · MUTING";
       } else {
@@ -206,12 +255,12 @@
     elements.status.dataset.state = visualState;
     elements.label.textContent = label;
     elements.details.textContent = isCandidate
-      ? `raw: ${raw} · stable: ${stable}`
+      ? `raw: ${raw} · stable: ${stable} · v${extensionVersion}`
       : `stable: ${stable} · tab: ${
           tabAudioState.tabMuted ? "muted" : "audible"
         } · player: ${
           latestInspection.signals.playerMuted ? "muted" : "audible"
-        } · source: ${tabAudioState.muteSource}`;
+        } · source: ${tabAudioState.muteSource} · v${extensionVersion}`;
   }
 
   function stopForInvalidatedContext() {
@@ -228,6 +277,7 @@
       clearInterval(watchdogTimer);
       watchdogTimer = null;
     }
+    clearMuteRetry();
     observer.disconnect();
     fullscreenObserver.disconnect();
 
@@ -236,7 +286,7 @@
       elements.status.dataset.state = "error";
       elements.label.textContent = "RELOAD PAGE";
       elements.details.textContent =
-        "Extension updated; refresh this tab.";
+        `Extension updated; refresh this tab. · v${extensionVersion}`;
     } else {
       removeOverlay();
     }
@@ -247,7 +297,11 @@
 
     if (message.includes("Extension context invalidated")) {
       stopForInvalidatedContext();
+      return;
     }
+
+    lastMessageFingerprint = "";
+    scheduleMuteRetry();
   }
 
   function findPlayer() {
@@ -293,6 +347,7 @@
     latestInspection = inspection;
     latestPhase = phase;
     renderOverlay();
+    reconcileMuteRetry();
 
     const payload = {
       type: "detector-state",
@@ -311,7 +366,16 @@
 
     lastMessageFingerprint = fingerprint;
     try {
-      chrome.runtime.sendMessage(payload).catch(handleRuntimeFailure);
+      chrome.runtime
+        .sendMessage(payload)
+        .then((response) => {
+          if (response?.type === "tab-audio-state") {
+            applyTabAudioState(response);
+          } else if (response?.type === "detector-error") {
+            handleRuntimeFailure(response.error);
+          }
+        })
+        .catch(handleRuntimeFailure);
     } catch (error) {
       handleRuntimeFailure(error);
     }
@@ -393,11 +457,7 @@
     }
   });
 
-  chrome.runtime.onMessage.addListener((message) => {
-    if (message?.type !== "tab-audio-state") {
-      return false;
-    }
-
+  function applyTabAudioState(message) {
     autoMuteEnabled = message.enabled === true;
     tabAudioState = {
       tabMuted: message.tabMuted === true,
@@ -405,7 +465,16 @@
       manualAdOverride: message.manualAdOverride === true,
       muteSource: message.muteSource || "unknown"
     };
+    reconcileMuteRetry();
     renderOverlay();
+  }
+
+  chrome.runtime.onMessage.addListener((message) => {
+    if (message?.type !== "tab-audio-state") {
+      return false;
+    }
+
+    applyTabAudioState(message);
     return false;
   });
 
