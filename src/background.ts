@@ -606,6 +606,8 @@ chrome.tabs.onUpdated.addListener((tabId, changeInfo) => {
 });
 
 chrome.tabs.onRemoved.addListener((tabId) => {
-  tabTaskQueues.delete(tabId);
-  chrome.storage.session.remove(sessionKey(tabId)).catch(() => {});
+  queueTabTask(
+    tabId,
+    () => chrome.storage.session.remove(sessionKey(tabId))
+  ).catch(() => {});
 });

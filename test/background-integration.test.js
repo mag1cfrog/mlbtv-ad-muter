@@ -43,7 +43,7 @@ function detectorState(classification) {
   };
 }
 
-test("coordinates mute lifecycle and global release", async () => {
+test("coordinates mute lifecycle, global release, and tab cleanup", async () => {
   const tabId = 7;
   const runtimeId = "test-extension";
   const session = {};
@@ -237,28 +237,22 @@ test("coordinates mute lifecycle and global release", async () => {
   session["tab:99"] = { mutedByExtension: true };
   session[validKey] = validRecord;
 
-  let releaseBlockedMute;
-  let signalMuteStarted;
-  const blockedMute = new Promise((resolve) => {
-    releaseBlockedMute = resolve;
-  });
-  const muteStarted = new Promise((resolve) => {
-    signalMuteStarted = resolve;
-  });
+  const blockedMute = Promise.withResolvers();
+  const muteStarted = Promise.withResolvers();
   muteBarrier = {
-    release: blockedMute,
-    started: signalMuteStarted
+    release: blockedMute.promise,
+    started: muteStarted.resolve
   };
 
   const pendingAd = sendDetectorState("ad");
-  await muteStarted;
+  await muteStarted.promise;
 
   settings.enabled = false;
   listeners.storageChanged(
     { enabled: { newValue: false } },
     "local"
   );
-  releaseBlockedMute();
+  blockedMute.resolve();
   await pendingAd;
 
   for (let attempt = 0; attempt < 10 && tab.mutedInfo.muted; attempt += 1) {
@@ -267,4 +261,28 @@ test("coordinates mute lifecycle and global release", async () => {
 
   assert.equal(tab.mutedInfo.muted, false);
   assert.deepEqual(tabUpdates.slice(-2), [true, false]);
+
+  settings.enabled = true;
+  const removalBlockedMute = Promise.withResolvers();
+  const removalMuteStarted = Promise.withResolvers();
+  muteBarrier = {
+    release: removalBlockedMute.promise,
+    started: removalMuteStarted.resolve
+  };
+
+  const pendingRemovedTabAd = sendDetectorState("ad");
+  await removalMuteStarted.promise;
+  listeners.tabRemoved(tabId);
+  removalBlockedMute.resolve();
+  await pendingRemovedTabAd;
+
+  for (
+    let attempt = 0;
+    attempt < 10 && Object.hasOwn(session, validKey);
+    attempt += 1
+  ) {
+    await new Promise((resolve) => setImmediate(resolve));
+  }
+
+  assert.equal(Object.hasOwn(session, validKey), false);
 });
