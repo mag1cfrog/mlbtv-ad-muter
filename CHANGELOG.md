@@ -4,6 +4,13 @@ This file records notable changes by extension version. Early versions were not
 tagged, so their entries are reconstructed from commits that changed the
 recorded version.
 
+## 0.2.1 - 2026-07-25
+
+### Changed
+
+- Clarified the Chrome Web Store summary to describe commercial-break
+  detection without the ambiguous phrase "player states".
+
 ## 0.2.0 - 2026-07-24
 
 ### Added

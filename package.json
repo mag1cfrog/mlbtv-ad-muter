@@ -1,8 +1,8 @@
 {
   "name": "mlbtv-ad-muter",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "private": true,
-  "description": "A local-only Chrome extension that detects commercial-break player states and mutes the tab.",
+  "description": "Locally detects commercial breaks on MLB.TV and can mute the browser tab while commercials continue playing.",
   "scripts": {
     "build": "node scripts/build.js",
     "test": "npm run build && npm run typecheck:tests && node --test",
