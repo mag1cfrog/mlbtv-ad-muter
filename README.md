@@ -30,6 +30,10 @@ endorsed by Major League Baseball, MLB.TV, any team, or any broadcaster.
 After changing extension files, click **Reload** on the unpacked extension card
 and reload the supported stream tab.
 
+Reloading an unpacked extension invalidates content scripts already running in
+open tabs. The old monitor stops and shows **RELOAD PAGE** when the on-page
+overlay is enabled, rather than leaving a stale detector status visible.
+
 ## Diagnostics
 
 Expand **Local diagnostics** in the popup to inspect the ten most recent
@@ -50,6 +54,10 @@ bottom-right corner of the supported player page:
 
 The overlay is disabled by default, isolated in a Shadow DOM, and uses
 `pointer-events: none` so it cannot intercept player interaction.
+When the player enters fullscreen, the overlay is moved inside either the
+browser Fullscreen API element or MLB's CSS fullscreen wrapper, then returned
+to the document root on exit. Only the player wrapper's `class` attribute is
+observed for this transition.
 
 The mute state machine deliberately ignores short candidate and unknown
 transitions after a commercial is confirmed. Audio is restored only after game
@@ -78,6 +86,7 @@ npm test
 Important files:
 
 - `src/detector.js`: player-state signal collection and pure classification logic
+- `src/overlay-policy.js`: normal and fullscreen overlay placement
 - `src/timing-policy.js`: asymmetric detector timing policy
 - `src/content.js`: DOM observation and transition hysteresis
 - `src/mute-policy.js`: pure mute-state decision policy

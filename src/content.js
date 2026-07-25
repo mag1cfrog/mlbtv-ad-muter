@@ -2,9 +2,10 @@
   "use strict";
 
   const detector = globalThis.BaseballBreakDetector;
+  const overlayPolicy = globalThis.BaseballBreakOverlayPolicy;
   const timingPolicy = globalThis.BaseballBreakTimingPolicy;
 
-  if (!detector || !timingPolicy) {
+  if (!detector || !overlayPolicy || !timingPolicy) {
     console.error("Baseball Break Muter: detector dependencies failed to load.");
     return;
   }
@@ -13,14 +14,17 @@
   let candidateClassification = null;
   let candidateSince = 0;
   let evaluationTimer = null;
+  let watchdogTimer = null;
   let lastMessageFingerprint = "";
   let observedTarget = null;
+  let observedFullscreenTarget = null;
   let overlayEnabled = false;
   let autoMuteEnabled = false;
   let overlayHost = null;
   let overlayElements = null;
   let latestInspection = null;
   let latestPhase = "stable";
+  let monitorStopped = false;
   let tabAudioState = {
     tabMuted: false,
     mutedByExtension: false,
@@ -29,6 +33,10 @@
   };
 
   function scheduleEvaluation(delayMs = timingPolicy.TIMING_MS.debounce) {
+    if (monitorStopped) {
+      return;
+    }
+
     if (evaluationTimer !== null) {
       clearTimeout(evaluationTimer);
     }
@@ -40,7 +48,12 @@
   }
 
   function ensureOverlay() {
+    const mountTarget = overlayPolicy.getMountTarget(document);
+
     if (overlayHost?.isConnected && overlayElements) {
+      if (overlayHost.parentNode !== mountTarget) {
+        mountTarget.appendChild(overlayHost);
+      }
       return overlayElements;
     }
 
@@ -93,6 +106,10 @@
           animation: pulse 900ms ease-in-out infinite alternate;
         }
 
+        .status[data-state="error"] .dot {
+          background: #ef4444;
+        }
+
         strong,
         small {
           display: block;
@@ -129,7 +146,7 @@
       label: shadow.querySelector("strong"),
       details: shadow.querySelector("small")
     };
-    document.documentElement.append(overlayHost);
+    mountTarget.appendChild(overlayHost);
     return overlayElements;
   }
 
@@ -175,6 +192,42 @@
         } · source: ${tabAudioState.muteSource}`;
   }
 
+  function stopForInvalidatedContext() {
+    if (monitorStopped) {
+      return;
+    }
+
+    monitorStopped = true;
+    if (evaluationTimer !== null) {
+      clearTimeout(evaluationTimer);
+      evaluationTimer = null;
+    }
+    if (watchdogTimer !== null) {
+      clearInterval(watchdogTimer);
+      watchdogTimer = null;
+    }
+    observer.disconnect();
+    fullscreenObserver.disconnect();
+
+    if (overlayEnabled) {
+      const elements = ensureOverlay();
+      elements.status.dataset.state = "error";
+      elements.label.textContent = "RELOAD PAGE";
+      elements.details.textContent =
+        "Extension updated; refresh this tab.";
+    } else {
+      removeOverlay();
+    }
+  }
+
+  function handleRuntimeFailure(error) {
+    const message = String(error?.message || error || "");
+
+    if (message.includes("Extension context invalidated")) {
+      stopForInvalidatedContext();
+    }
+  }
+
   function findPlayer() {
     return (
       document.querySelector(detector.SELECTORS.player) ||
@@ -183,20 +236,35 @@
   }
 
   function refreshObserverTarget() {
-    const nextTarget = findPlayer() || document.documentElement;
+    const player = findPlayer();
+    const nextTarget = player || document.documentElement;
 
-    if (nextTarget === observedTarget) {
+    if (nextTarget !== observedTarget) {
+      observer.disconnect();
+      observer.observe(nextTarget, {
+        subtree: true,
+        childList: true,
+        attributes: true,
+        attributeFilter: ["aria-label", "class"]
+      });
+      observedTarget = nextTarget;
+    }
+
+    const nextFullscreenTarget =
+      player?.closest(".mlbtv-player") || null;
+
+    if (nextFullscreenTarget === observedFullscreenTarget) {
       return;
     }
 
-    observer.disconnect();
-    observer.observe(nextTarget, {
-      subtree: true,
-      childList: true,
-      attributes: true,
-      attributeFilter: ["aria-label", "class"]
-    });
-    observedTarget = nextTarget;
+    fullscreenObserver.disconnect();
+    if (nextFullscreenTarget) {
+      fullscreenObserver.observe(nextFullscreenTarget, {
+        attributes: true,
+        attributeFilter: ["class"]
+      });
+    }
+    observedFullscreenTarget = nextFullscreenTarget;
   }
 
   function sendState(inspection, phase) {
@@ -220,12 +288,18 @@
     }
 
     lastMessageFingerprint = fingerprint;
-    chrome.runtime.sendMessage(payload).catch(() => {
-      // The service worker can be briefly unavailable while Chrome restarts it.
-    });
+    try {
+      chrome.runtime.sendMessage(payload).catch(handleRuntimeFailure);
+    } catch (error) {
+      handleRuntimeFailure(error);
+    }
   }
 
   function evaluatePlayer() {
+    if (monitorStopped) {
+      return;
+    }
+
     refreshObserverTarget();
     const inspection = detector.inspect(document);
     const nextClassification = inspection.classification;
@@ -258,6 +332,14 @@
   }
 
   const observer = new MutationObserver(() => scheduleEvaluation());
+  const fullscreenObserver = new MutationObserver(() => {
+    if (!overlayEnabled) {
+      return;
+    }
+
+    ensureOverlay();
+    renderOverlay();
+  });
 
   chrome.storage.onChanged.addListener((changes, areaName) => {
     if (areaName !== "local") {
@@ -298,6 +380,21 @@
     return false;
   });
 
+  function handleFullscreenChange() {
+    if (!overlayEnabled) {
+      return;
+    }
+
+    ensureOverlay();
+    renderOverlay();
+  }
+
+  document.addEventListener("fullscreenchange", handleFullscreenChange);
+  document.addEventListener(
+    "webkitfullscreenchange",
+    handleFullscreenChange
+  );
+
   chrome.storage.local
     .get({
       enabled: false,
@@ -307,8 +404,12 @@
       autoMuteEnabled = settings.enabled;
       overlayEnabled = settings.showOverlay;
       renderOverlay();
-    });
+    })
+    .catch(handleRuntimeFailure);
 
-  setInterval(evaluatePlayer, timingPolicy.TIMING_MS.watchdog);
+  watchdogTimer = setInterval(
+    evaluatePlayer,
+    timingPolicy.TIMING_MS.watchdog
+  );
   evaluatePlayer();
 })();
