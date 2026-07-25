@@ -338,7 +338,10 @@ type ContentTabAudioState = {
 
   function refreshObserverTarget(): void {
     const player = findPlayer();
-    const nextTarget = player || document.documentElement;
+    const nextTarget =
+      player?.closest(".mlbtv-player") ||
+      player ||
+      document.documentElement;
 
     if (nextTarget !== observedTarget) {
       observer.disconnect();
@@ -446,7 +449,19 @@ type ContentTabAudioState = {
     publishDetectorState(inspection, "stable");
   }
 
-  const observer = new MutationObserver(() => scheduleEvaluation());
+  const observer = new MutationObserver(() => {
+    const explicitAdMarkerPresent =
+      stableClassification !== "ad" &&
+      Boolean(
+        findPlayer()?.querySelector(activeDetector.SELECTORS.adControls)
+      );
+
+    scheduleEvaluation(
+      explicitAdMarkerPresent
+        ? 0
+        : activeTimingPolicy.TIMING_MS.debounce
+    );
+  });
   const fullscreenObserver = new MutationObserver(() => {
     if (!overlayEnabled) {
       return;

@@ -15,12 +15,17 @@ const contentSource = fs.readFileSync(
   "utf8"
 );
 
-function inspection(classification: PlayerClassification) {
+function inspection(
+  classification: PlayerClassification,
+  explicitAdMarkerPresent = false
+) {
   return {
     classification,
     confidence: 1,
     reason: classification === "ad"
-      ? "explicit-ad-controls-marker-present"
+      ? explicitAdMarkerPresent
+        ? "explicit-ad-controls-marker-present"
+        : "only-minimal-playback-controls-present"
       : "rich-playback-controls-present",
     signals: {
       playerMuted: false
@@ -28,23 +33,43 @@ function inspection(classification: PlayerClassification) {
   };
 }
 
-test("confirms sustained transitions and ignores short flickers", async () => {
+test("handles sustained, flickering, and replaced-player transitions", async () => {
   let now = 0;
   let nextTimerId = 1;
   let currentClassification: PlayerClassification = "content";
+  let explicitAdMarkerPresent = false;
   const detectorMessages: DetectorStateMessage[] = [];
   const observerCallbacks: Array<() => void> = [];
+  const observedTargets: object[] = [];
   let runtimeMessageListener: RuntimeMessageListener | undefined;
   const timers = new Map<number, {
     at: number;
     callback: () => void;
   }>();
+  const playerWrapper = {};
+  const createPlayer = () => ({
+    closest() {
+      return playerWrapper;
+    },
+    querySelector(selector: string) {
+      return (
+        selector === ".ad-controls" &&
+        explicitAdMarkerPresent
+      )
+        ? {}
+        : null;
+    }
+  });
+  let currentPlayer = createPlayer();
   const documentRoot = {
     documentElement: {},
     fullscreenElement: null,
     webkitFullscreenElement: null,
     addEventListener() {},
-    querySelector() {
+    querySelector(selector: string) {
+      if (selector === ".player") {
+        return currentPlayer;
+      }
       return null;
     }
   };
@@ -87,10 +112,14 @@ test("confirms sustained transitions and ignores short flickers", async () => {
     MlbTvAdMuterDetector: {
       SELECTORS: {
         player: ".player",
-        fallbackPlayer: "video"
+        fallbackPlayer: "video",
+        adControls: ".ad-controls"
       },
       inspect() {
-        return inspection(currentClassification);
+        return inspection(
+          currentClassification,
+          explicitAdMarkerPresent
+        );
       }
     },
     MlbTvAdMuterOverlayPolicy: {
@@ -108,8 +137,14 @@ test("confirms sustained transitions and ignores short flickers", async () => {
         watchdog: 1500
       },
       confirmationDelayFor(
-        { classification }: Pick<DetectorClassification, "classification">
+        {
+          classification,
+          reason
+        }: Pick<DetectorClassification, "classification" | "reason">
       ) {
+        if (reason === "explicit-ad-controls-marker-present") {
+          return 0;
+        }
         return classification === "ad" ? 100 : 200;
       },
       muteRetryDelay() {
@@ -122,7 +157,9 @@ test("confirms sustained transitions and ignores short flickers", async () => {
       }
 
       disconnect() {}
-      observe() {}
+      observe(target: object) {
+        observedTargets.push(target);
+      }
     },
     chrome: {
       runtime: {
@@ -199,6 +236,7 @@ test("confirms sustained transitions and ignores short flickers", async () => {
   vm.runInContext(contentSource, context);
   await flushPromises();
 
+  assert.equal(observedTargets[0], playerWrapper);
   await advance(199);
   assert.equal(stableCount("content"), 0);
   await advance(1);
@@ -237,4 +275,12 @@ test("confirms sustained transitions and ignores short flickers", async () => {
   assert.equal(stableCount("content"), contentCountBeforeReturn);
   await advance(1);
   assert.equal(stableCount("content"), contentCountBeforeReturn + 1);
+
+  const adCountBeforeReplacement = stableCount("ad");
+  currentPlayer = createPlayer();
+  currentClassification = "ad";
+  explicitAdMarkerPresent = true;
+  evaluateAfterMutation();
+  await advance(0);
+  assert.equal(stableCount("ad"), adCountBeforeReplacement + 1);
 });
