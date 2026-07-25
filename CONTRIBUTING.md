@@ -9,7 +9,7 @@ Thanks for helping improve Baseball Break Muter.
   download features, or authentication/DRM workarounds.
 - Prefer semantic and accessibility attributes over generated CSS classes.
 - Treat false positives conservatively: normal content should regain audio
-  immediately.
+  after it remains stable for the two-second confirmation period.
 - Do not include broadcast clips, screenshots, logos, credentials, cookies, or
   player manifests in issues or test fixtures.
 

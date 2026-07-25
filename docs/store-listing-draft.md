@@ -17,14 +17,15 @@ player.
 
 ## Privacy summary
 
-Player-control state is processed locally. The extension does not transmit
-browsing activity, viewing activity, account information, or player contents.
-The enabled setting is stored locally. Current detection state is held only for
-the browser session.
+Player-control presence and the player's muted state are processed locally.
+The extension does not transmit browsing activity, viewing activity, account
+information, or video content. Auto-mute, overlay visibility, and overlay
+position settings are stored in local extension storage. Current detection and
+mute state, generalized mute-source categories, and up to 40 recent transitions
+are stored only for the browser session.
 
 ## Compatibility and affiliation
 
 Currently compatible with the MLB.TV web player. This is an independent,
 unofficial project and is not affiliated with or endorsed by Major League
 Baseball, MLB.TV, any team, or any broadcaster.
-
