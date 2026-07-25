@@ -470,8 +470,9 @@ async function handleNavigation(
 
 async function releaseAllExtensionMutes(): Promise<void> {
   const allSessionValues = await chrome.storage.session.get();
+  const releaseTasks: Promise<void>[] = [];
 
-  for (const [key, storedRecord] of Object.entries(allSessionValues)) {
+  for (const key of Object.keys(allSessionValues)) {
     if (!key.startsWith("tab:")) {
       continue;
     }
@@ -481,17 +482,23 @@ async function releaseAllExtensionMutes(): Promise<void> {
       continue;
     }
 
-    const record = storedRecord as TabSessionRecord;
-    let next = await releaseMute(tabId, record);
-    next = {
-      ...next,
-      adMuteLatched: false,
-      ...(await getTabMuteState(tabId))
-    };
-    await setSessionRecord(tabId, next);
-    await setBadge(tabId, next, false);
-    await notifyTabAudioState(tabId, next, false);
+    releaseTasks.push(queueTabTask(tabId, async () => {
+      const record = await getSessionRecord(tabId);
+      let next = await releaseMute(tabId, record);
+      next = {
+        ...next,
+        adMuteLatched: false,
+        ...(await getTabMuteState(tabId))
+      };
+      await setSessionRecord(tabId, next);
+      await setBadge(tabId, next, false);
+      await notifyTabAudioState(tabId, next, false);
+    }));
   }
+
+  await Promise.all(
+    releaseTasks.map((release) => release.catch(console.error))
+  );
 }
 
 chrome.runtime.onInstalled.addListener(async () => {

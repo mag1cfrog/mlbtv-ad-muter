@@ -43,12 +43,13 @@ function detectorState(classification) {
   };
 }
 
-test("coordinates ad muting, manual override, and navigation release", async () => {
+test("coordinates mute lifecycle and global release", async () => {
   const tabId = 7;
   const runtimeId = "test-extension";
   const session = {};
   const tabUpdates = [];
   const listeners = {};
+  let muteBarrier = null;
   const settings = {
     enabled: true,
     showOverlay: false,
@@ -64,7 +65,11 @@ test("coordinates ad muting, manual override, and navigation release", async () 
 
   const chrome = {
     action: {
-      async setBadgeBackgroundColor() {},
+      async setBadgeBackgroundColor({ tabId: badgeTabId }) {
+        if (badgeTabId === 99) {
+          throw new Error("No tab with id: 99");
+        }
+      },
       async setBadgeText() {}
     },
     runtime: {
@@ -123,6 +128,14 @@ test("coordinates ad muting, manual override, and navigation release", async () 
       async sendMessage() {},
       async update(requestedTabId, update) {
         assert.equal(requestedTabId, tabId);
+
+        if (update.muted && muteBarrier) {
+          const barrier = muteBarrier;
+          muteBarrier = null;
+          barrier.started();
+          await barrier.release;
+        }
+
         tabUpdates.push(update.muted);
         tab.mutedInfo = {
           muted: update.muted,
@@ -217,4 +230,41 @@ test("coordinates ad muting, manual override, and navigation release", async () 
   }
 
   assert.equal(session[`tab:${tabId}`].debugHistory.length, 40);
+
+  const validKey = `tab:${tabId}`;
+  const validRecord = session[validKey];
+  delete session[validKey];
+  session["tab:99"] = { mutedByExtension: true };
+  session[validKey] = validRecord;
+
+  let releaseBlockedMute;
+  let signalMuteStarted;
+  const blockedMute = new Promise((resolve) => {
+    releaseBlockedMute = resolve;
+  });
+  const muteStarted = new Promise((resolve) => {
+    signalMuteStarted = resolve;
+  });
+  muteBarrier = {
+    release: blockedMute,
+    started: signalMuteStarted
+  };
+
+  const pendingAd = sendDetectorState("ad");
+  await muteStarted;
+
+  settings.enabled = false;
+  listeners.storageChanged(
+    { enabled: { newValue: false } },
+    "local"
+  );
+  releaseBlockedMute();
+  await pendingAd;
+
+  for (let attempt = 0; attempt < 10 && tab.mutedInfo.muted; attempt += 1) {
+    await new Promise((resolve) => setImmediate(resolve));
+  }
+
+  assert.equal(tab.mutedInfo.muted, false);
+  assert.deepEqual(tabUpdates.slice(-2), [true, false]);
 });
