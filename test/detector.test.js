@@ -143,3 +143,9 @@ test("collects the player controller's muted state for diagnostics", () => {
 
   assert.equal(collectSignals(documentRoot).playerMuted, true);
 });
+
+test("reports player audio as unavailable when video is missing", () => {
+  const documentRoot = fakeDocument([SELECTORS.player]);
+
+  assert.equal(collectSignals(documentRoot).playerMuted, null);
+});

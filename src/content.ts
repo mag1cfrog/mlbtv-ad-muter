@@ -254,6 +254,11 @@ type ContentTabAudioState = {
     const stable = stableClassification;
     const raw = latestInspection.classification;
     const visualState = isCandidate ? "candidate" : stable;
+    const playerAudioState = latestInspection.signals.playerMuted === null
+      ? "unavailable"
+      : latestInspection.signals.playerMuted
+        ? "muted"
+        : "audible";
     let label = visualState.toUpperCase();
 
     if (!isCandidate && stable === "ad") {
@@ -275,10 +280,10 @@ type ContentTabAudioState = {
     elements.details.textContent = isCandidate
       ? `raw: ${raw} · stable: ${stable} · v${extensionVersion}`
       : `stable: ${stable} · tab: ${
-          tabAudioState.tabMuted ? "muted" : "audible"
-        } · player: ${
-          latestInspection.signals.playerMuted ? "muted" : "audible"
-        } · source: ${tabAudioState.muteSource} · v${extensionVersion}`;
+        tabAudioState.tabMuted ? "muted" : "audible"
+        } · player: ${playerAudioState} · source: ${
+          tabAudioState.muteSource
+        } · v${extensionVersion}`;
   }
 
   function stopForInvalidatedContext(): void {
