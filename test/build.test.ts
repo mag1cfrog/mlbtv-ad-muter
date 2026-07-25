@@ -6,8 +6,12 @@ const test = require("node:test");
 const assert = require("node:assert/strict");
 
 const dist = path.join(__dirname, "..", "dist");
-const manifest = require("../dist/manifest.json");
-const packageMetadata = require("../package.json");
+const manifest = require("../dist/manifest.json") as typeof import(
+  "../manifest.json"
+);
+const packageMetadata = require("../package.json") as typeof import(
+  "../package.json"
+);
 
 test("keeps package and extension versions in sync", () => {
   assert.equal(manifest.version, packageMetadata.version);

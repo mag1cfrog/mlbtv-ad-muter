@@ -10,10 +10,35 @@ const backgroundSource = fs.readFileSync(
   path.join(__dirname, "..", "dist", "src", "background.js"),
   "utf8"
 );
-const mutePolicy = require("../dist/src/mute-policy.js");
-const overlayPolicy = require("../dist/src/overlay-policy.js");
+const mutePolicy =
+  require("../dist/src/mute-policy.js") as MutePolicy;
+const overlayPolicy =
+  require("../dist/src/overlay-policy.js") as OverlayPolicy;
 
-function detectorState(classification) {
+type TestDetectorResponse = Exclude<DetectorResponse, undefined>;
+type MessageListener = (
+  message: DetectorStateMessage,
+  sender: { tab?: { id?: number } },
+  sendResponse: (response: TestDetectorResponse) => void
+) => boolean;
+type TestListeners = Partial<{
+  installed: () => void;
+  message: MessageListener;
+  storageChanged: (
+    changes: Record<string, { newValue?: unknown }>,
+    areaName: string
+  ) => void;
+  tabRemoved: (tabId: number) => void;
+  tabUpdated: (tabId: number, changeInfo: object) => void;
+}>;
+type MuteBarrier = {
+  release: Promise<void>;
+  started: () => void;
+};
+
+function detectorState(
+  classification: PlayerClassification
+): DetectorStateMessage {
   const isAd = classification === "ad";
 
   return {
@@ -46,17 +71,25 @@ function detectorState(classification) {
 test("coordinates mute lifecycle, global release, and tab cleanup", async () => {
   const tabId = 7;
   const runtimeId = "test-extension";
-  const session = {};
-  const tabUpdates = [];
-  const listeners = {};
-  let muteBarrier = null;
-  let nextTabUpdateError = null;
-  const settings = {
+  const session: Record<string, TabSessionRecord> = {};
+  const tabUpdates: boolean[] = [];
+  const listeners: TestListeners = {};
+  let muteBarrier: MuteBarrier | null = null;
+  let nextTabUpdateError: Error | null = null;
+  const settings: {
+    enabled: boolean;
+    showOverlay: boolean;
+    overlayPosition: OverlayPosition;
+  } = {
     enabled: true,
     showOverlay: false,
     overlayPosition: "bottom-right"
-  };
-  const tab = {
+  } satisfies ExtensionSettings;
+  const tab: {
+    id: number;
+    url: string;
+    mutedInfo: chrome.tabs.MutedInfo;
+  } = {
     id: tabId,
     url: "https://www.mlb.com/tv/game",
     mutedInfo: {
@@ -66,7 +99,9 @@ test("coordinates mute lifecycle, global release, and tab cleanup", async () => 
 
   const chrome = {
     action: {
-      async setBadgeBackgroundColor({ tabId: badgeTabId }) {
+      async setBadgeBackgroundColor(
+        { tabId: badgeTabId }: { tabId: number }
+      ) {
         if (badgeTabId === 99) {
           throw new Error("No tab with id: 99");
         }
@@ -76,30 +111,30 @@ test("coordinates mute lifecycle, global release, and tab cleanup", async () => 
     runtime: {
       id: runtimeId,
       onInstalled: {
-        addListener(listener) {
+        addListener(listener: () => void) {
           listeners.installed = listener;
         }
       },
       onMessage: {
-        addListener(listener) {
+        addListener(listener: MessageListener) {
           listeners.message = listener;
         }
       }
     },
     storage: {
       local: {
-        async get(defaults) {
+        async get(defaults: ExtensionSettings) {
           return {
             ...defaults,
             ...settings
           };
         },
-        async set(values) {
+        async set(values: Partial<ExtensionSettings>) {
           Object.assign(settings, values);
         }
       },
       session: {
-        async get(key) {
+        async get(key: string | undefined) {
           if (key === undefined) {
             return { ...session };
           }
@@ -108,26 +143,29 @@ test("coordinates mute lifecycle, global release, and tab cleanup", async () => 
             ? { [key]: session[key] }
             : {};
         },
-        async remove(key) {
+        async remove(key: string) {
           delete session[key];
         },
-        async set(values) {
+        async set(values: Record<string, TabSessionRecord>) {
           Object.assign(session, values);
         }
       },
       onChanged: {
-        addListener(listener) {
+        addListener(listener: NonNullable<TestListeners["storageChanged"]>) {
           listeners.storageChanged = listener;
         }
       }
     },
     tabs: {
-      async get(requestedTabId) {
+      async get(requestedTabId: number) {
         assert.equal(requestedTabId, tabId);
         return tab;
       },
       async sendMessage() {},
-      async update(requestedTabId, update) {
+      async update(
+        requestedTabId: number,
+        update: { muted: boolean }
+      ) {
         assert.equal(requestedTabId, tabId);
 
         if (nextTabUpdateError) {
@@ -152,12 +190,12 @@ test("coordinates mute lifecycle, global release, and tab cleanup", async () => 
         return tab;
       },
       onRemoved: {
-        addListener(listener) {
+        addListener(listener: NonNullable<TestListeners["tabRemoved"]>) {
           listeners.tabRemoved = listener;
         }
       },
       onUpdated: {
-        addListener(listener) {
+        addListener(listener: NonNullable<TestListeners["tabUpdated"]>) {
           listeners.tabUpdated = listener;
         }
       }
@@ -179,9 +217,9 @@ test("coordinates mute lifecycle, global release, and tab cleanup", async () => 
     })
   );
 
-  function sendDetectorState(classification) {
-    return new Promise((resolve) => {
-      const keepChannelOpen = listeners.message(
+  function sendDetectorState(classification: PlayerClassification) {
+    return new Promise<TestDetectorResponse>((resolve) => {
+      const keepChannelOpen = listeners.message!(
         detectorState(classification),
         { tab: { id: tabId } },
         resolve
@@ -191,9 +229,15 @@ test("coordinates mute lifecycle, global release, and tab cleanup", async () => 
     });
   }
 
-  async function emitTabUpdate(changeInfo) {
-    listeners.tabUpdated(tabId, changeInfo);
+  async function emitTabUpdate(changeInfo: object) {
+    listeners.tabUpdated!(tabId, changeInfo);
     await new Promise((resolve) => setImmediate(resolve));
+  }
+
+  function assertAudioState(
+    value: TestDetectorResponse
+  ): asserts value is TabAudioStateMessage {
+    assert.equal(value.type, "tab-audio-state");
   }
 
   tab.mutedInfo = {
@@ -201,10 +245,12 @@ test("coordinates mute lifecycle, global release, and tab cleanup", async () => 
     reason: "user"
   };
   let response = await sendDetectorState("ad");
+  assertAudioState(response);
   assert.equal(response.tabMuted, true);
   assert.equal(response.muteSource, "user");
 
   response = await sendDetectorState("content");
+  assertAudioState(response);
   assert.equal(response.tabMuted, true);
   assert.equal(response.muteSource, "user");
   assert.deepEqual(tabUpdates, []);
@@ -215,27 +261,35 @@ test("coordinates mute lifecycle, global release, and tab cleanup", async () => 
   nextTabUpdateError = new Error("Simulated tab update failure");
   response = await sendDetectorState("ad");
   assert.equal(response.type, "detector-error");
+  assert.equal("error" in response, true);
+  if (!("error" in response)) {
+    throw new Error("Expected a detector error response.");
+  }
   assert.match(response.error, /Simulated tab update failure/);
 
   response = await sendDetectorState("ad");
+  assertAudioState(response);
   assert.equal(response.tabMuted, true);
   assert.equal(tab.mutedInfo.extensionId, runtimeId);
 
   const userUnmute = {
     muted: false,
     reason: "user"
-  };
+  } satisfies chrome.tabs.MutedInfo;
   tab.mutedInfo = userUnmute;
   await emitTabUpdate({ mutedInfo: userUnmute });
 
   response = await sendDetectorState("ad");
+  assertAudioState(response);
   assert.equal(response.tabMuted, false);
   assert.equal(response.manualAdOverride, true);
 
   response = await sendDetectorState("content");
+  assertAudioState(response);
   assert.equal(response.manualAdOverride, false);
 
   response = await sendDetectorState("ad");
+  assertAudioState(response);
   assert.equal(response.tabMuted, true);
 
   const unsupportedUrl = "https://example.com/";
@@ -247,9 +301,9 @@ test("coordinates mute lifecycle, global release, and tab cleanup", async () => 
 
   assert.equal(tab.mutedInfo.muted, false);
   assert.deepEqual(tabUpdates, [true, true, false]);
-  assert.equal(session[`tab:${tabId}`].stableClassification, "unknown");
+  assert.equal(session[`tab:${tabId}`]?.stableClassification, "unknown");
   assert.equal(
-    session[`tab:${tabId}`].lastDecision,
+    session[`tab:${tabId}`]?.lastDecision,
     "release-navigation-mute"
   );
 
@@ -257,26 +311,27 @@ test("coordinates mute lifecycle, global release, and tab cleanup", async () => 
     await sendDetectorState("content");
   }
 
-  assert.equal(session[`tab:${tabId}`].debugHistory.length, 40);
+  assert.equal(session[`tab:${tabId}`]?.debugHistory?.length, 40);
 
   const validKey = `tab:${tabId}`;
   const validRecord = session[validKey];
+  assert.ok(validRecord);
   delete session[validKey];
   session["tab:99"] = { mutedByExtension: true };
   session[validKey] = validRecord;
 
-  const blockedMute = Promise.withResolvers();
-  const muteStarted = Promise.withResolvers();
+  const blockedMute = Promise.withResolvers<void>();
+  const muteStarted = Promise.withResolvers<void>();
   muteBarrier = {
     release: blockedMute.promise,
-    started: muteStarted.resolve
+    started: () => muteStarted.resolve()
   };
 
   const pendingAd = sendDetectorState("ad");
   await muteStarted.promise;
 
   settings.enabled = false;
-  listeners.storageChanged(
+  listeners.storageChanged!(
     { enabled: { newValue: false } },
     "local"
   );
@@ -291,16 +346,16 @@ test("coordinates mute lifecycle, global release, and tab cleanup", async () => 
   assert.deepEqual(tabUpdates.slice(-2), [true, false]);
 
   settings.enabled = true;
-  const removalBlockedMute = Promise.withResolvers();
-  const removalMuteStarted = Promise.withResolvers();
+  const removalBlockedMute = Promise.withResolvers<void>();
+  const removalMuteStarted = Promise.withResolvers<void>();
   muteBarrier = {
     release: removalBlockedMute.promise,
-    started: removalMuteStarted.resolve
+    started: () => removalMuteStarted.resolve()
   };
 
   const pendingRemovedTabAd = sendDetectorState("ad");
   await removalMuteStarted.promise;
-  listeners.tabRemoved(tabId);
+  listeners.tabRemoved!(tabId);
   removalBlockedMute.resolve();
   await pendingRemovedTabAd;
 

@@ -30,7 +30,7 @@ Coming soon.
 
 ### Load unpacked
 
-Requires Node.js 22 or newer.
+Requires Node.js 22.18 or newer.
 
 1. Run `npm install`.
 2. Run `npm run build`.
@@ -69,8 +69,8 @@ npm test
 ```
 
 `npm test` builds the extension and runs the full test suite. TypeScript and
-Chrome type definitions are development-only dependencies; the compiled
-extension has no third-party runtime dependencies or bundler.
+type definitions are development-only dependencies; the compiled extension
+has no third-party runtime dependencies or bundler.
 
 Run `npm run package:release` to test, build, and write a versioned Store ZIP
 to `release/`.

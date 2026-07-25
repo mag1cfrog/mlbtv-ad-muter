@@ -6,9 +6,11 @@ const {
   SELECTORS,
   classifySignals,
   collectSignals
-} = require("../dist/src/detector.js");
+} = require("../dist/src/detector.js") as DetectorPolicy;
 
-function signals(overrides = {}) {
+function signals(
+  overrides: Partial<DetectorSignals> = {}
+): DetectorSignals {
   return {
     hasPlayer: true,
     hasVideo: true,
@@ -27,16 +29,19 @@ function signals(overrides = {}) {
   };
 }
 
-function fakeDocument(selectors, { playerMuted = false } = {}) {
+function fakeDocument(
+  selectors: readonly string[],
+  { playerMuted = false }: { playerMuted?: boolean } = {}
+): ParentNode {
   const available = new Set(selectors);
   const scope = {
     muted: playerMuted,
-    querySelector(selector) {
+    querySelector(selector: string) {
       return available.has(selector) ? scope : null;
     }
   };
 
-  return scope;
+  return scope as unknown as ParentNode;
 }
 
 test("classifies the observed rich live-player controls as content", () => {

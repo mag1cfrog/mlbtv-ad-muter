@@ -12,9 +12,17 @@ const contentSource = fs.readFileSync(
 );
 
 test("retries ad muting and renders unavailable player audio", async () => {
-  const detectorMessages = [];
+  const detectorMessages: DetectorStateMessage[] = [];
   const overlayDetails = { textContent: "" };
-  const overlayHost = {
+  const overlayHost: {
+    dataset: Record<string, string>;
+    isConnected: boolean;
+    parentNode: object | null;
+    attachShadow: () => {
+      querySelector: (selector: string) => object;
+    };
+    remove: () => void;
+  } = {
     dataset: {},
     isConnected: false,
     parentNode: null,
@@ -23,7 +31,7 @@ test("retries ad muting and renders unavailable player audio", async () => {
       const label = { textContent: "" };
 
       return {
-        querySelector(selector) {
+        querySelector(selector: string) {
           if (selector === ".status") {
             return status;
           }
@@ -45,7 +53,7 @@ test("retries ad muting and renders unavailable player audio", async () => {
   };
   const documentRoot = {
     documentElement: {
-      appendChild(element) {
+      appendChild(element: typeof overlayHost) {
         element.isConnected = true;
         element.parentNode = this;
       }
@@ -82,7 +90,7 @@ test("retries ad muting and renders unavailable player audio", async () => {
       getMountTarget() {
         return documentRoot.documentElement;
       },
-      normalizePosition(position) {
+      normalizePosition(position: OverlayPosition | undefined) {
         return position || "bottom-right";
       }
     },
@@ -117,7 +125,7 @@ test("retries ad muting and renders unavailable player audio", async () => {
         onMessage: {
           addListener() {}
         },
-        sendMessage(message) {
+        sendMessage(message: DetectorStateMessage) {
           detectorMessages.push(message);
           const acknowledged = detectorMessages.length >= 2;
 
