@@ -45,7 +45,9 @@ It also records whether the player controller itself is muted, which is
 separate from Chrome's tab-level mute.
 
 Enable **Show on-page status** for an optional, noninteractive indicator in the
-bottom-right corner of the supported player page:
+selected corner of the supported player page. The popup offers top-left,
+top-right, bottom-left, and bottom-right positions, with bottom-right as the
+default:
 
 - Green: stable game content
 - Orange: commercial state and tab mute status

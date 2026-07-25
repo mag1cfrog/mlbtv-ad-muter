@@ -2,7 +2,31 @@
 
 const test = require("node:test");
 const assert = require("node:assert/strict");
-const { getMountTarget } = require("../src/overlay-policy.js");
+const {
+  DEFAULT_POSITION,
+  POSITIONS,
+  getMountTarget,
+  normalizePosition
+} = require("../src/overlay-policy.js");
+
+test("supports each on-page status corner", () => {
+  assert.deepEqual(POSITIONS, [
+    "top-left",
+    "top-right",
+    "bottom-left",
+    "bottom-right"
+  ]);
+
+  for (const position of POSITIONS) {
+    assert.equal(normalizePosition(position), position);
+  }
+});
+
+test("defaults invalid overlay positions to bottom-right", () => {
+  assert.equal(DEFAULT_POSITION, "bottom-right");
+  assert.equal(normalizePosition("center"), DEFAULT_POSITION);
+  assert.equal(normalizePosition(undefined), DEFAULT_POSITION);
+});
 
 test("mounts the overlay inside the active fullscreen element", () => {
   const fullscreenElement = { id: "fullscreen-player" };

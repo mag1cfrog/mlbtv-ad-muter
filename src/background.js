@@ -1,18 +1,21 @@
 "use strict";
 
-importScripts("mute-policy.js");
+importScripts("mute-policy.js", "overlay-policy.js");
+
+const mutePolicy = globalThis.BaseballBreakMutePolicy;
+const overlayPolicy = globalThis.BaseballBreakOverlayPolicy;
+
+if (!mutePolicy || !overlayPolicy) {
+  throw new Error("Baseball Break Muter: background dependencies failed to load.");
+}
 
 const SETTINGS_DEFAULTS = Object.freeze({
   enabled: false,
-  showOverlay: false
+  showOverlay: false,
+  overlayPosition: overlayPolicy.DEFAULT_POSITION
 });
 const DEBUG_HISTORY_LIMIT = 40;
 const detectorQueues = new Map();
-const mutePolicy = globalThis.BaseballBreakMutePolicy;
-
-if (!mutePolicy) {
-  throw new Error("Baseball Break Muter: mute policy failed to load.");
-}
 
 function sessionKey(tabId) {
   return `tab:${tabId}`;
@@ -374,6 +377,13 @@ chrome.runtime.onInstalled.addListener(async () => {
     }
   }
 
+  const normalizedOverlayPosition = overlayPolicy.normalizePosition(
+    existing.overlayPosition
+  );
+  if (existing.overlayPosition !== normalizedOverlayPosition) {
+    missingDefaults.overlayPosition = normalizedOverlayPosition;
+  }
+
   if (Object.keys(missingDefaults).length) {
     await chrome.storage.local.set(missingDefaults);
   }
@@ -394,6 +404,9 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         sendResponse({
           enabled: settings.enabled,
           showOverlay: settings.showOverlay,
+          overlayPosition: overlayPolicy.normalizePosition(
+            settings.overlayPosition
+          ),
           record
         });
       })

@@ -4,6 +4,7 @@ const enabledInput = document.querySelector("#enabled");
 const modeElement = document.querySelector("#mode");
 const showOverlayInput = document.querySelector("#show-overlay");
 const overlayModeElement = document.querySelector("#overlay-mode");
+const overlayPositionInput = document.querySelector("#overlay-position");
 const classificationElement = document.querySelector("#classification");
 const reasonElement = document.querySelector("#reason");
 const dotElement = document.querySelector("#status-dot");
@@ -62,10 +63,16 @@ function renderDebugHistory(history = []) {
     .join("\n");
 }
 
-function render({ enabled, showOverlay, record = {} }) {
+function render({
+  enabled,
+  showOverlay,
+  overlayPosition = "bottom-right",
+  record = {}
+}) {
   const classification = record.stableClassification || "unknown";
   enabledInput.checked = enabled;
   showOverlayInput.checked = showOverlay;
+  overlayPositionInput.value = overlayPosition;
   modeElement.textContent = enabled
     ? "Auto-mute enabled"
     : "Observation mode";
@@ -95,6 +102,7 @@ async function refresh() {
     render({
       enabled: false,
       showOverlay: false,
+      overlayPosition: "bottom-right",
       record: {}
     });
     return;
@@ -144,6 +152,13 @@ enabledInput.addEventListener("change", async () => {
 showOverlayInput.addEventListener("change", async () => {
   await chrome.storage.local.set({
     showOverlay: showOverlayInput.checked
+  });
+  await refresh();
+});
+
+overlayPositionInput.addEventListener("change", async () => {
+  await chrome.storage.local.set({
+    overlayPosition: overlayPositionInput.value
   });
   await refresh();
 });

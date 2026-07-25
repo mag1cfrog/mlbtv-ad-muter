@@ -1,6 +1,6 @@
 {
   "name": "baseball-break-muter",
-  "version": "0.1.7",
+  "version": "0.1.8",
   "private": true,
   "description": "A local-only Chrome extension that detects commercial-break player states and mutes the tab.",
   "scripts": {

@@ -19,6 +19,7 @@
   let observedTarget = null;
   let observedFullscreenTarget = null;
   let overlayEnabled = false;
+  let overlayPosition = overlayPolicy.DEFAULT_POSITION;
   let autoMuteEnabled = false;
   let overlayHost = null;
   let overlayElements = null;
@@ -49,8 +50,10 @@
 
   function ensureOverlay() {
     const mountTarget = overlayPolicy.getMountTarget(document);
+    const position = overlayPolicy.normalizePosition(overlayPosition);
 
     if (overlayHost?.isConnected && overlayElements) {
+      overlayHost.dataset.position = position;
       if (overlayHost.parentNode !== mountTarget) {
         mountTarget.appendChild(overlayHost);
       }
@@ -59,16 +62,35 @@
 
     overlayHost = document.createElement("div");
     overlayHost.id = "baseball-break-muter-overlay-host";
+    overlayHost.dataset.position = position;
     const shadow = overlayHost.attachShadow({ mode: "open" });
     shadow.innerHTML = `
       <style>
         :host {
           all: initial;
           position: fixed;
-          right: 16px;
-          bottom: 16px;
           z-index: 2147483647;
           pointer-events: none;
+        }
+
+        :host([data-position="top-left"]) {
+          top: 16px;
+          left: 16px;
+        }
+
+        :host([data-position="top-right"]) {
+          top: 16px;
+          right: 16px;
+        }
+
+        :host([data-position="bottom-left"]) {
+          bottom: 16px;
+          left: 16px;
+        }
+
+        :host([data-position="bottom-right"]) {
+          right: 16px;
+          bottom: 16px;
         }
 
         .status {
@@ -359,6 +381,13 @@
       shouldEvaluate = true;
     }
 
+    if (changes.overlayPosition) {
+      overlayPosition = overlayPolicy.normalizePosition(
+        changes.overlayPosition.newValue
+      );
+      renderOverlay();
+    }
+
     if (shouldEvaluate) {
       evaluatePlayer();
     }
@@ -398,11 +427,15 @@
   chrome.storage.local
     .get({
       enabled: false,
-      showOverlay: false
+      showOverlay: false,
+      overlayPosition: overlayPolicy.DEFAULT_POSITION
     })
     .then((settings) => {
       autoMuteEnabled = settings.enabled;
       overlayEnabled = settings.showOverlay;
+      overlayPosition = overlayPolicy.normalizePosition(
+        settings.overlayPosition
+      );
       renderOverlay();
     })
     .catch(handleRuntimeFailure);

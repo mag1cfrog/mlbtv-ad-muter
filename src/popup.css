@@ -53,6 +53,28 @@ h1 {
   margin-top: 10px;
 }
 
+.select-setting {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: 8px;
+  padding: 4px 3px 2px;
+  color: #4b5567;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.select-setting select {
+  border: 1px solid #c7cfdd;
+  border-radius: 7px;
+  background: #ffffff;
+  padding: 5px 24px 5px 8px;
+  color: #263247;
+  font: inherit;
+  font-size: 11px;
+}
+
 .toggle input {
   width: 18px;
   height: 18px;
