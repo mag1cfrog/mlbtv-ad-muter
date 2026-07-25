@@ -53,6 +53,10 @@ function renderDebugHistory(history = []) {
         return `${time} repaired unintended tab unmute`;
       }
 
+      if (event.eventType === "navigation") {
+        return `${time} navigation: ${event.decision}`;
+      }
+
       return [
         time,
         `${event.rawClassification} → ${event.stableClassification}`,

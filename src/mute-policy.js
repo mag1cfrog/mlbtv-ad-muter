@@ -100,10 +100,26 @@
     );
   }
 
+  function shouldPreserveAdMuteOnNavigation({
+    adMuteLatched = false,
+    enabled,
+    isSupportedStream,
+    manualAdOverride = false,
+    stableClassification
+  }) {
+    return (
+      enabled &&
+      isSupportedStream &&
+      (adMuteLatched || stableClassification === "ad") &&
+      !manualAdOverride
+    );
+  }
+
   return Object.freeze({
     classifyMuteSource,
     describeTabMuteState,
     decideMuteAction,
+    shouldPreserveAdMuteOnNavigation,
     shouldRepairUnmute
   });
 });

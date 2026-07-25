@@ -75,6 +75,10 @@ Each detector request now returns Chrome's confirmed tab-audio state directly
 to the page monitor. If a stable commercial state remains audible because that
 request or acknowledgment failed, the monitor retries after 500 milliseconds
 and backs off to at most one retry every 1.5 seconds until mute is confirmed.
+If the supported stream page enters a loading state between adjacent ads, an
+established ad mute remains latched through navigation. Navigation away from a
+supported stream still releases the extension-owned mute, and stable game
+content remains the normal signal that ends an ad mute.
 
 The explicit commercial-controls marker is confirmed for 300 milliseconds.
 The weaker minimal-controls fallback is confirmed for 900 milliseconds.

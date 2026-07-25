@@ -6,6 +6,7 @@ const {
   classifyMuteSource,
   describeTabMuteState,
   decideMuteAction,
+  shouldPreserveAdMuteOnNavigation,
   shouldRepairUnmute
 } = require("../src/mute-policy.js");
 
@@ -222,6 +223,50 @@ test("repairs only an unintended extension-originated unmute during an ad", () =
       ...stableAd,
       stableClassification: "content",
       muteSource: "this-extension"
+    }),
+    false
+  );
+});
+
+test("preserves an ad mute across supported stream navigation", () => {
+  const activeAdNavigation = {
+    adMuteLatched: true,
+    enabled: true,
+    isSupportedStream: true,
+    manualAdOverride: false,
+    stableClassification: "unknown"
+  };
+
+  assert.equal(
+    shouldPreserveAdMuteOnNavigation(activeAdNavigation),
+    true
+  );
+  assert.equal(
+    shouldPreserveAdMuteOnNavigation({
+      ...activeAdNavigation,
+      adMuteLatched: false,
+      stableClassification: "ad"
+    }),
+    true
+  );
+  assert.equal(
+    shouldPreserveAdMuteOnNavigation({
+      ...activeAdNavigation,
+      isSupportedStream: false
+    }),
+    false
+  );
+  assert.equal(
+    shouldPreserveAdMuteOnNavigation({
+      ...activeAdNavigation,
+      manualAdOverride: true
+    }),
+    false
+  );
+  assert.equal(
+    shouldPreserveAdMuteOnNavigation({
+      ...activeAdNavigation,
+      enabled: false
     }),
     false
   );

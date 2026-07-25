@@ -21,6 +21,20 @@ function sessionKey(tabId) {
   return `tab:${tabId}`;
 }
 
+function isSupportedStreamUrl(url) {
+  try {
+    const parsed = new URL(url);
+
+    return (
+      parsed.protocol === "https:" &&
+      parsed.hostname === "www.mlb.com" &&
+      parsed.pathname.startsWith("/tv/")
+    );
+  } catch {
+    return false;
+  }
+}
+
 async function getSessionRecord(tabId) {
   const key = sessionKey(tabId);
   const values = await chrome.storage.session.get(key);
@@ -235,6 +249,32 @@ function addReconciliationDebugEvent(record) {
   };
 }
 
+function addNavigationDebugEvent(record, decision) {
+  const history = Array.isArray(record.debugHistory)
+    ? record.debugHistory
+    : [];
+  const event = {
+    eventType: "navigation",
+    at: Date.now(),
+    decision,
+    adMuteLatched: Boolean(record.adMuteLatched),
+    mutedByExtension: Boolean(record.mutedByExtension),
+    tabMuted: record.tabMuted,
+    muteSource: record.muteSource
+  };
+
+  console.debug("Baseball Break Muter navigation audio policy", event);
+
+  return {
+    ...record,
+    lastDecision: decision,
+    debugHistory: [
+      ...history.slice(-(DEBUG_HISTORY_LIMIT - 1)),
+      event
+    ]
+  };
+}
+
 async function handleDetectorState(tabId, message) {
   const settings = await chrome.storage.local.get(SETTINGS_DEFAULTS);
   const previous = await getSessionRecord(tabId);
@@ -254,6 +294,9 @@ async function handleDetectorState(tabId, message) {
     message.stableClassification === "content"
   ) {
     next.manualAdOverride = false;
+    next.adMuteLatched = false;
+  } else if (message.stableClassification === "ad") {
+    next.adMuteLatched = true;
   }
 
   const decision = mutePolicy.decideMuteAction({
@@ -330,19 +373,45 @@ async function handleMuteInfoChange(tabId, mutedInfo) {
   await notifyTabAudioState(tabId, next, settings.enabled);
 }
 
-async function handleNavigation(tabId) {
+async function handleNavigation(tabId, navigationUrl) {
   const settings = await chrome.storage.local.get(SETTINGS_DEFAULTS);
   const previous = await getSessionRecord(tabId);
-  let next = await releaseMute(tabId, previous);
+  let currentUrl = navigationUrl;
+
+  if (!currentUrl) {
+    try {
+      currentUrl = (await chrome.tabs.get(tabId)).url;
+    } catch {
+      currentUrl = "";
+    }
+  }
+
+  const preserveAdMute = mutePolicy.shouldPreserveAdMuteOnNavigation({
+    adMuteLatched: Boolean(previous.adMuteLatched),
+    enabled: settings.enabled,
+    isSupportedStream: isSupportedStreamUrl(currentUrl),
+    manualAdOverride: Boolean(previous.manualAdOverride),
+    stableClassification: previous.stableClassification
+  });
+  let next = preserveAdMute
+    ? await ensureMuted(tabId, previous)
+    : await releaseMute(tabId, previous);
   next = {
     ...next,
     phase: "stable",
     stableClassification: "unknown",
     rawClassification: "unknown",
     reason: "navigation",
-    manualAdOverride: false,
+    adMuteLatched: preserveAdMute,
+    manualAdOverride: preserveAdMute
+      ? Boolean(previous.manualAdOverride)
+      : false,
     ...(await getTabMuteState(tabId))
   };
+  next = addNavigationDebugEvent(
+    next,
+    preserveAdMute ? "preserve-ad-mute" : "release-navigation-mute"
+  );
 
   await setSessionRecord(tabId, next);
   await setBadge(tabId, next, settings.enabled);
@@ -365,6 +434,7 @@ async function releaseAllExtensionMutes() {
     let next = await releaseMute(tabId, record);
     next = {
       ...next,
+      adMuteLatched: false,
       ...(await getTabMuteState(tabId))
     };
     await setSessionRecord(tabId, next);
@@ -456,7 +526,7 @@ chrome.tabs.onUpdated.addListener((tabId, changeInfo) => {
   if (changeInfo.status === "loading") {
     queueTabTask(
       tabId,
-      () => handleNavigation(tabId)
+      () => handleNavigation(tabId, changeInfo.url)
     ).catch(() => {
       // A missing or inaccessible tab needs no cleanup.
     });
