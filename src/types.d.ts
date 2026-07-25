@@ -151,4 +151,46 @@ type TimingPolicy = Readonly<{
   muteRetryDelay(attempt: number): number;
 }>;
 
+type ExtensionSettings = Readonly<{
+  enabled: boolean;
+  showOverlay: boolean;
+  overlayPosition: OverlayPosition;
+}>;
+
+type DetectorStateMessage = Readonly<{
+  type: "detector-state";
+  phase: DetectorPhase;
+  stableClassification: PlayerClassification;
+  rawClassification: PlayerClassification;
+  confidence: number;
+  reason: DetectorReason;
+  signals: DetectorSignals;
+}>;
+
+type TabAudioStateMessage = Readonly<{
+  type: "tab-audio-state";
+  enabled: boolean;
+  tabMuted: boolean | null;
+  mutedByExtension: boolean;
+  manualAdOverride: boolean;
+  muteSource: MuteSource;
+}>;
+
+type DetectorErrorMessage = Readonly<{
+  type: "detector-error";
+  error: string;
+}>;
+
+type DetectorResponse =
+  | DetectorErrorMessage
+  | TabAudioStateMessage
+  | undefined;
+
+type ExtensionGlobals = typeof globalThis & {
+  BaseballBreakDetector?: DetectorPolicy;
+  BaseballBreakMutePolicy?: MutePolicy;
+  BaseballBreakOverlayPolicy?: OverlayPolicy;
+  BaseballBreakTimingPolicy?: TimingPolicy;
+};
+
 declare const module: { exports: unknown } | undefined;

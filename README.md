@@ -104,7 +104,7 @@ Important files:
 - `src/detector.ts`: player-state signal collection and pure classification logic
 - `src/overlay-policy.ts`: normal and fullscreen overlay placement
 - `src/timing-policy.ts`: asymmetric detector timing policy
-- `src/content.js`: DOM observation and transition hysteresis
+- `src/content.ts`: DOM observation and transition hysteresis
 - `src/mute-policy.ts`: pure mute-state decision policy
 - `src/background.js`: safe tab muting and restoration
 - `docs/research-notes.md`: observed player-state evidence

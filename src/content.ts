@@ -1,9 +1,23 @@
+type OverlayElements = Readonly<{
+  status: HTMLDivElement;
+  label: HTMLElement;
+  details: HTMLElement;
+}>;
+
+type ContentTabAudioState = {
+  tabMuted: boolean;
+  mutedByExtension: boolean;
+  manualAdOverride: boolean;
+  muteSource: MuteSource;
+};
+
 (function startContentMonitor() {
   "use strict";
 
-  const detector = globalThis.BaseballBreakDetector;
-  const overlayPolicy = globalThis.BaseballBreakOverlayPolicy;
-  const timingPolicy = globalThis.BaseballBreakTimingPolicy;
+  const extensionGlobals = globalThis as ExtensionGlobals;
+  const detector = extensionGlobals.BaseballBreakDetector;
+  const overlayPolicy = extensionGlobals.BaseballBreakOverlayPolicy;
+  const timingPolicy = extensionGlobals.BaseballBreakTimingPolicy;
   const extensionVersion = chrome.runtime.getManifest().version;
 
   if (!detector || !overlayPolicy || !timingPolicy) {
@@ -11,32 +25,36 @@
     return;
   }
 
-  let stableClassification = "unknown";
-  let candidateClassification = null;
+  const activeDetector: DetectorPolicy = detector;
+  const activeOverlayPolicy: OverlayPolicy = overlayPolicy;
+  const activeTimingPolicy: TimingPolicy = timingPolicy;
+
+  let stableClassification: PlayerClassification = "unknown";
+  let candidateClassification: PlayerClassification | null = null;
   let candidateSince = 0;
-  let evaluationTimer = null;
-  let muteRetryTimer = null;
+  let evaluationTimer: number | null = null;
+  let muteRetryTimer: number | null = null;
   let muteRetryAttempt = 0;
-  let watchdogTimer = null;
+  let watchdogTimer: number | null = null;
   let lastMessageFingerprint = "";
-  let observedTarget = null;
-  let observedFullscreenTarget = null;
+  let observedTarget: Element | null = null;
+  let observedFullscreenTarget: Element | null = null;
   let overlayEnabled = false;
-  let overlayPosition = overlayPolicy.DEFAULT_POSITION;
+  let overlayPosition: OverlayPosition = activeOverlayPolicy.DEFAULT_POSITION;
   let autoMuteEnabled = false;
-  let overlayHost = null;
-  let overlayElements = null;
-  let latestInspection = null;
-  let latestPhase = "stable";
+  let overlayHost: HTMLDivElement | null = null;
+  let overlayElements: OverlayElements | null = null;
+  let latestInspection: DetectorInspection | null = null;
+  let latestPhase: DetectorPhase = "stable";
   let monitorStopped = false;
-  let tabAudioState = {
+  let tabAudioState: ContentTabAudioState = {
     tabMuted: false,
     mutedByExtension: false,
     manualAdOverride: false,
     muteSource: "unknown"
   };
 
-  function isMuteAcknowledgmentPending() {
+  function isMuteAcknowledgmentPending(): boolean {
     return (
       autoMuteEnabled &&
       stableClassification === "ad" &&
@@ -45,7 +63,7 @@
     );
   }
 
-  function clearMuteRetry() {
+  function clearMuteRetry(): void {
     if (muteRetryTimer !== null) {
       clearTimeout(muteRetryTimer);
       muteRetryTimer = null;
@@ -53,7 +71,7 @@
     muteRetryAttempt = 0;
   }
 
-  function scheduleMuteRetry() {
+  function scheduleMuteRetry(): void {
     if (
       monitorStopped ||
       muteRetryTimer !== null ||
@@ -62,7 +80,7 @@
       return;
     }
 
-    const delayMs = timingPolicy.muteRetryDelay(muteRetryAttempt);
+    const delayMs = activeTimingPolicy.muteRetryDelay(muteRetryAttempt);
     muteRetryTimer = setTimeout(() => {
       muteRetryTimer = null;
       muteRetryAttempt += 1;
@@ -71,7 +89,7 @@
     }, delayMs);
   }
 
-  function reconcileMuteRetry() {
+  function reconcileMuteRetry(): void {
     if (isMuteAcknowledgmentPending()) {
       scheduleMuteRetry();
       return;
@@ -80,7 +98,9 @@
     clearMuteRetry();
   }
 
-  function scheduleEvaluation(delayMs = timingPolicy.TIMING_MS.debounce) {
+  function scheduleEvaluation(
+    delayMs = activeTimingPolicy.TIMING_MS.debounce
+  ): void {
     if (monitorStopped) {
       return;
     }
@@ -95,9 +115,9 @@
     }, delayMs);
   }
 
-  function ensureOverlay() {
-    const mountTarget = overlayPolicy.getMountTarget(document);
-    const position = overlayPolicy.normalizePosition(overlayPosition);
+  function ensureOverlay(): OverlayElements {
+    const mountTarget = activeOverlayPolicy.getMountTarget(document);
+    const position = activeOverlayPolicy.normalizePosition(overlayPosition);
 
     if (overlayHost?.isConnected && overlayElements) {
       overlayHost.dataset.position = position;
@@ -211,21 +231,21 @@
     `;
 
     overlayElements = {
-      status: shadow.querySelector(".status"),
-      label: shadow.querySelector("strong"),
-      details: shadow.querySelector("small")
+      status: shadow.querySelector<HTMLDivElement>(".status")!,
+      label: shadow.querySelector<HTMLElement>("strong")!,
+      details: shadow.querySelector<HTMLElement>("small")!
     };
     mountTarget.appendChild(overlayHost);
     return overlayElements;
   }
 
-  function removeOverlay() {
+  function removeOverlay(): void {
     overlayHost?.remove();
     overlayHost = null;
     overlayElements = null;
   }
 
-  function renderOverlay() {
+  function renderOverlay(): void {
     if (!overlayEnabled || !latestInspection) {
       removeOverlay();
       return;
@@ -263,7 +283,7 @@
         } · source: ${tabAudioState.muteSource} · v${extensionVersion}`;
   }
 
-  function stopForInvalidatedContext() {
+  function stopForInvalidatedContext(): void {
     if (monitorStopped) {
       return;
     }
@@ -292,8 +312,10 @@
     }
   }
 
-  function handleRuntimeFailure(error) {
-    const message = String(error?.message || error || "");
+  function handleRuntimeFailure(error: unknown): void {
+    const message = error instanceof Error
+      ? error.message
+      : String(error || "");
 
     if (message.includes("Extension context invalidated")) {
       stopForInvalidatedContext();
@@ -304,14 +326,14 @@
     scheduleMuteRetry();
   }
 
-  function findPlayer() {
+  function findPlayer(): Element | null {
     return (
-      document.querySelector(detector.SELECTORS.player) ||
-      document.querySelector(detector.SELECTORS.fallbackPlayer)
+      document.querySelector(activeDetector.SELECTORS.player) ||
+      document.querySelector(activeDetector.SELECTORS.fallbackPlayer)
     );
   }
 
-  function refreshObserverTarget() {
+  function refreshObserverTarget(): void {
     const player = findPlayer();
     const nextTarget = player || document.documentElement;
 
@@ -343,13 +365,16 @@
     observedFullscreenTarget = nextFullscreenTarget;
   }
 
-  function sendState(inspection, phase) {
+  function sendState(
+    inspection: DetectorInspection,
+    phase: DetectorPhase
+  ): void {
     latestInspection = inspection;
     latestPhase = phase;
     renderOverlay();
     reconcileMuteRetry();
 
-    const payload = {
+    const payload: DetectorStateMessage = {
       type: "detector-state",
       phase,
       stableClassification,
@@ -368,11 +393,12 @@
     try {
       chrome.runtime
         .sendMessage(payload)
-        .then((response) => {
-          if (response?.type === "tab-audio-state") {
-            applyTabAudioState(response);
-          } else if (response?.type === "detector-error") {
-            handleRuntimeFailure(response.error);
+        .then((response: unknown) => {
+          const message = response as DetectorResponse;
+          if (message?.type === "tab-audio-state") {
+            applyTabAudioState(message);
+          } else if (message?.type === "detector-error") {
+            handleRuntimeFailure(message.error);
           }
         })
         .catch(handleRuntimeFailure);
@@ -381,13 +407,13 @@
     }
   }
 
-  function evaluatePlayer() {
+  function evaluatePlayer(): void {
     if (monitorStopped) {
       return;
     }
 
     refreshObserverTarget();
-    const inspection = detector.inspect(document);
+    const inspection = activeDetector.inspect(document);
     const nextClassification = inspection.classification;
     const now = Date.now();
 
@@ -396,7 +422,7 @@
       candidateSince = now;
     }
 
-    const holdMs = timingPolicy.holdFor(inspection);
+    const holdMs = activeTimingPolicy.holdFor(inspection);
     const elapsedMs = now - candidateSince;
 
     if (
@@ -446,7 +472,7 @@
     }
 
     if (changes.overlayPosition) {
-      overlayPosition = overlayPolicy.normalizePosition(
+      overlayPosition = activeOverlayPolicy.normalizePosition(
         changes.overlayPosition.newValue
       );
       renderOverlay();
@@ -457,7 +483,7 @@
     }
   });
 
-  function applyTabAudioState(message) {
+  function applyTabAudioState(message: TabAudioStateMessage): void {
     autoMuteEnabled = message.enabled === true;
     tabAudioState = {
       tabMuted: message.tabMuted === true,
@@ -470,15 +496,17 @@
   }
 
   chrome.runtime.onMessage.addListener((message) => {
-    if (message?.type !== "tab-audio-state") {
+    const audioState = message as TabAudioStateMessage;
+
+    if (audioState?.type !== "tab-audio-state") {
       return false;
     }
 
-    applyTabAudioState(message);
+    applyTabAudioState(audioState);
     return false;
   });
 
-  function handleFullscreenChange() {
+  function handleFullscreenChange(): void {
     if (!overlayEnabled) {
       return;
     }
@@ -497,12 +525,13 @@
     .get({
       enabled: false,
       showOverlay: false,
-      overlayPosition: overlayPolicy.DEFAULT_POSITION
+      overlayPosition: activeOverlayPolicy.DEFAULT_POSITION
     })
-    .then((settings) => {
+    .then((storedSettings) => {
+      const settings = storedSettings as ExtensionSettings;
       autoMuteEnabled = settings.enabled;
       overlayEnabled = settings.showOverlay;
-      overlayPosition = overlayPolicy.normalizePosition(
+      overlayPosition = activeOverlayPolicy.normalizePosition(
         settings.overlayPosition
       );
       renderOverlay();
@@ -511,7 +540,7 @@
 
   watchdogTimer = setInterval(
     evaluatePlayer,
-    timingPolicy.TIMING_MS.watchdog
+    activeTimingPolicy.TIMING_MS.watchdog
   );
   evaluatePlayer();
 })();
