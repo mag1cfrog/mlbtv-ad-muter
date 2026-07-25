@@ -146,27 +146,6 @@ async function refresh(): Promise<void> {
   render(state);
 }
 
-async function copyText(text: string): Promise<void> {
-  try {
-    await navigator.clipboard.writeText(text);
-    return;
-  } catch {
-    const textArea = document.createElement("textarea");
-    textArea.value = text;
-    textArea.setAttribute("readonly", "");
-    textArea.style.position = "fixed";
-    textArea.style.opacity = "0";
-    document.body.append(textArea);
-    textArea.select();
-    const copied = document.execCommand("copy");
-    textArea.remove();
-
-    if (!copied) {
-      throw new Error("Clipboard access was unavailable.");
-    }
-  }
-}
-
 enabledInput.addEventListener("change", async () => {
   await chrome.storage.local.set({
     enabled: enabledInput.checked
@@ -195,7 +174,9 @@ copyDiagnosticsButton.addEventListener("click", async () => {
   }
 
   try {
-    await copyText(JSON.stringify(lastPopupState, null, 2));
+    await navigator.clipboard.writeText(
+      JSON.stringify(lastPopupState, null, 2)
+    );
     copyStatusElement.textContent = "Copied.";
   } catch {
     copyStatusElement.textContent = "Copy failed.";
