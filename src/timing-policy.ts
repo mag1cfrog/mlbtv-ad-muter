@@ -1,12 +1,13 @@
-(function initializeTimingPolicy(root, factory) {
-  const policy = factory();
+type PlayerClassification = "ad" | "content" | "unknown";
 
-  if (typeof module !== "undefined" && module.exports) {
-    module.exports = policy;
-  }
+type PlayerInspection = Readonly<{
+  classification: PlayerClassification;
+  reason: string;
+}>;
 
-  root.BaseballBreakTimingPolicy = policy;
-})(typeof globalThis !== "undefined" ? globalThis : this, function createTimingPolicy() {
+declare const module: { exports: unknown } | undefined;
+
+(function initializeTimingPolicy() {
   "use strict";
 
   const TIMING_MS = Object.freeze({
@@ -20,7 +21,7 @@
     watchdog: 1500
   });
 
-  function muteRetryDelay(attempt) {
+  function muteRetryDelay(attempt: number): number {
     const safeAttempt = Math.max(0, Math.min(attempt, 10));
 
     return Math.min(
@@ -29,7 +30,7 @@
     );
   }
 
-  function holdFor(inspection) {
+  function holdFor(inspection: PlayerInspection): number {
     if (
       inspection.classification === "ad" &&
       inspection.reason === "explicit-ad-controls-marker-present"
@@ -48,9 +49,19 @@
     return TIMING_MS.unknown;
   }
 
-  return Object.freeze({
+  const policy = Object.freeze({
     TIMING_MS,
     holdFor,
     muteRetryDelay
   });
-});
+
+  if (typeof module !== "undefined" && module.exports) {
+    module.exports = policy;
+  }
+
+  (
+    globalThis as typeof globalThis & {
+      BaseballBreakTimingPolicy: typeof policy;
+    }
+  ).BaseballBreakTimingPolicy = policy;
+})();

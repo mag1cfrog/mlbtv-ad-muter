@@ -8,7 +8,7 @@ const {
   decideMuteAction,
   shouldPreserveAdMuteOnNavigation,
   shouldRepairUnmute
-} = require("../src/mute-policy.js");
+} = require("../dist/src/mute-policy.js");
 
 function decision(overrides = {}) {
   return decideMuteAction({

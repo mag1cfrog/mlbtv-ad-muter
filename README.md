@@ -20,15 +20,17 @@ endorsed by Major League Baseball, MLB.TV, any team, or any broadcaster.
 
 ## Local installation
 
-1. Open `chrome://extensions`.
-2. Enable **Developer mode**.
-3. Choose **Load unpacked**.
-4. Select this repository directory.
-5. Open the extension popup while viewing a supported stream.
-6. Confirm that the detected state is accurate before enabling auto-muting.
+1. Run `npm install`.
+2. Run `npm run build`.
+3. Open `chrome://extensions`.
+4. Enable **Developer mode**.
+5. Choose **Load unpacked**.
+6. Select this repository's `dist` directory.
+7. Open the extension popup while viewing a supported stream.
+8. Confirm that the detected state is accurate before enabling auto-muting.
 
-After changing extension files, click **Reload** on the unpacked extension card
-and reload the supported stream tab.
+After changing extension files, run `npm run build`, click **Reload** on the
+unpacked extension card, and reload the supported stream tab.
 
 Reloading an unpacked extension invalidates content scripts already running in
 open tabs. The old monitor stops and shows **RELOAD PAGE** when the on-page
@@ -87,17 +89,21 @@ Player DOM changes trigger checks through a narrowly scoped observer, with a
 
 ## Development
 
-No build step or third-party runtime dependencies are required.
+TypeScript is compiled with `tsc` into a loadable extension in `dist`. No
+bundler or third-party runtime dependencies are required.
 
 ```text
+npm install
 npm test
 ```
+
+`npm test` builds the extension before running the test suite.
 
 Important files:
 
 - `src/detector.js`: player-state signal collection and pure classification logic
 - `src/overlay-policy.js`: normal and fullscreen overlay placement
-- `src/timing-policy.js`: asymmetric detector timing policy
+- `src/timing-policy.ts`: asymmetric detector timing policy
 - `src/content.js`: DOM observation and transition hysteresis
 - `src/mute-policy.js`: pure mute-state decision policy
 - `src/background.js`: safe tab muting and restoration

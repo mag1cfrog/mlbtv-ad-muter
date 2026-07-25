@@ -18,6 +18,7 @@ Thanks for helping improve Baseball Break Muter.
 Run:
 
 ```text
+npm install
 npm test
 ```
 

@@ -7,7 +7,7 @@ const {
   POSITIONS,
   getMountTarget,
   normalizePosition
-} = require("../src/overlay-policy.js");
+} = require("../dist/src/overlay-policy.js");
 
 test("supports each on-page status corner", () => {
   assert.deepEqual(POSITIONS, [

@@ -7,7 +7,7 @@ const assert = require("node:assert/strict");
 const vm = require("node:vm");
 
 const contentSource = fs.readFileSync(
-  path.join(__dirname, "..", "src", "content.js"),
+  path.join(__dirname, "..", "dist", "src", "content.js"),
   "utf8"
 );
 

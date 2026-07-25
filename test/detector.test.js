@@ -6,7 +6,7 @@ const {
   SELECTORS,
   classifySignals,
   collectSignals
-} = require("../src/detector.js");
+} = require("../dist/src/detector.js");
 
 function signals(overrides = {}) {
   return {
