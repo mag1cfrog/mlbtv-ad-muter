@@ -1,12 +1,12 @@
 # Ad Muter for MLB.TV
 
 <p align="center">
-  <img src="src/icons/icon-128.png" alt="Ad Muter for MLB.TV icon" width="128">
+  <img
+    src="store-assets/promotional/small-promo-440x280.png"
+    alt="Hear the game. Mute the breaks."
+    width="440"
+  >
 </p>
-
-<h3 align="center">
-  <strong>Mute the breaks. Hear the game.</strong>
-</h3>
 
 <p align="center">
   <strong>No telemetry. No remote code. Zero runtime dependencies.</strong>
