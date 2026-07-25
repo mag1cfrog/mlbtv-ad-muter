@@ -1,12 +1,4 @@
-(function initializeDetector(root, factory) {
-  const detector = factory();
-
-  if (typeof module !== "undefined" && module.exports) {
-    module.exports = detector;
-  }
-
-  root.BaseballBreakDetector = detector;
-})(typeof globalThis !== "undefined" ? globalThis : this, function createDetector() {
+(function initializeDetector() {
   "use strict";
 
   const SELECTORS = Object.freeze({
@@ -27,16 +19,16 @@
     fullscreen: 'button[aria-label="Watch Full Screen"]'
   });
 
-  function has(scope, selector) {
-    return Boolean(scope && scope.querySelector(selector));
+  function has(scope: ParentNode | null, selector: string): boolean {
+    return Boolean(scope?.querySelector(selector));
   }
 
-  function collectSignals(documentRoot) {
+  function collectSignals(documentRoot: ParentNode): DetectorSignals {
     const player =
       documentRoot.querySelector(SELECTORS.player) ||
       documentRoot.querySelector(SELECTORS.fallbackPlayer);
     const scope = player || documentRoot;
-    const video = scope.querySelector(SELECTORS.video);
+    const video = scope.querySelector<HTMLVideoElement>(SELECTORS.video);
 
     return {
       hasPlayer: Boolean(player),
@@ -55,7 +47,9 @@
     };
   }
 
-  function classifySignals(signals) {
+  function classifySignals(
+    signals: DetectorSignals
+  ): DetectorClassification {
     if (!signals.hasPlayer || !signals.hasVideo) {
       return {
         classification: "unknown",
@@ -113,7 +107,7 @@
     };
   }
 
-  function inspect(documentRoot) {
+  function inspect(documentRoot: ParentNode): DetectorInspection {
     const signals = collectSignals(documentRoot);
     return {
       ...classifySignals(signals),
@@ -121,10 +115,20 @@
     };
   }
 
-  return Object.freeze({
+  const detector: DetectorPolicy = Object.freeze({
     SELECTORS,
     classifySignals,
     collectSignals,
     inspect
   });
-});
+
+  if (typeof module !== "undefined" && module.exports) {
+    module.exports = detector;
+  }
+
+  (
+    globalThis as typeof globalThis & {
+      BaseballBreakDetector: DetectorPolicy;
+    }
+  ).BaseballBreakDetector = detector;
+})();

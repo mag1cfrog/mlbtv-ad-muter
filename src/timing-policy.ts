@@ -1,12 +1,3 @@
-type PlayerClassification = "ad" | "content" | "unknown";
-
-type PlayerInspection = Readonly<{
-  classification: PlayerClassification;
-  reason: string;
-}>;
-
-declare const module: { exports: unknown } | undefined;
-
 (function initializeTimingPolicy() {
   "use strict";
 
@@ -30,7 +21,9 @@ declare const module: { exports: unknown } | undefined;
     );
   }
 
-  function holdFor(inspection: PlayerInspection): number {
+  function holdFor(
+    inspection: Pick<DetectorClassification, "classification" | "reason">
+  ): number {
     if (
       inspection.classification === "ad" &&
       inspection.reason === "explicit-ad-controls-marker-present"
@@ -49,7 +42,7 @@ declare const module: { exports: unknown } | undefined;
     return TIMING_MS.unknown;
   }
 
-  const policy = Object.freeze({
+  const policy: TimingPolicy = Object.freeze({
     TIMING_MS,
     holdFor,
     muteRetryDelay

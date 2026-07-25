@@ -1,12 +1,4 @@
-(function initializeMutePolicy(root, factory) {
-  const policy = factory();
-
-  if (typeof module !== "undefined" && module.exports) {
-    module.exports = policy;
-  }
-
-  root.BaseballBreakMutePolicy = policy;
-})(typeof globalThis !== "undefined" ? globalThis : this, function createMutePolicy() {
+(function initializeMutePolicy() {
   "use strict";
 
   function decideMuteAction({
@@ -14,7 +6,7 @@
     manualAdOverride = false,
     phase,
     stableClassification
-  }) {
+  }: DecideMuteActionInput): MuteDecision {
     if (!enabled) {
       return {
         action: "release",
@@ -52,7 +44,10 @@
     };
   }
 
-  function classifyMuteSource(mutedInfo, runtimeId) {
+  function classifyMuteSource(
+    mutedInfo: chrome.tabs.MutedInfo | undefined,
+    runtimeId: string
+  ): MuteSource {
     if (!mutedInfo?.reason) {
       return "unknown";
     }
@@ -70,7 +65,10 @@
     return "unknown";
   }
 
-  function describeTabMuteState(mutedInfo, runtimeId) {
+  function describeTabMuteState(
+    mutedInfo: chrome.tabs.MutedInfo | undefined,
+    runtimeId: string
+  ): TabMuteState {
     const tabMuted = Boolean(mutedInfo?.muted);
     const muteSource = classifyMuteSource(mutedInfo, runtimeId);
 
@@ -90,7 +88,7 @@
     muteSource,
     stableClassification,
     tabMuted
-  }) {
+  }: RepairUnmuteInput): boolean {
     return (
       enabled &&
       stableClassification === "ad" &&
@@ -106,7 +104,7 @@
     isSupportedStream,
     manualAdOverride = false,
     stableClassification
-  }) {
+  }: PreserveAdMuteInput): boolean {
     return (
       enabled &&
       isSupportedStream &&
@@ -115,11 +113,21 @@
     );
   }
 
-  return Object.freeze({
+  const policy: MutePolicy = Object.freeze({
     classifyMuteSource,
     describeTabMuteState,
     decideMuteAction,
     shouldPreserveAdMuteOnNavigation,
     shouldRepairUnmute
   });
-});
+
+  if (typeof module !== "undefined" && module.exports) {
+    module.exports = policy;
+  }
+
+  (
+    globalThis as typeof globalThis & {
+      BaseballBreakMutePolicy: MutePolicy;
+    }
+  ).BaseballBreakMutePolicy = policy;
+})();
