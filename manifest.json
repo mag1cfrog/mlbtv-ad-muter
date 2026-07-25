@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Ad Muter for MLB.TV",
-  "version": "0.2.2",
+  "version": "0.2.3",
   "description": "Locally detects commercial breaks on MLB.TV and can mute the browser tab while commercials continue playing.",
   "icons": {
     "16": "src/icons/icon-16.png",

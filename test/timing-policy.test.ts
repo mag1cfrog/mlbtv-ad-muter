@@ -8,13 +8,13 @@ const {
   muteRetryDelay
 } = require("../dist/src/timing-policy.js") as TimingPolicy;
 
-test("confirms the explicit commercial marker quickly", () => {
+test("confirms the explicit commercial marker immediately", () => {
   assert.equal(
     confirmationDelayFor({
       classification: "ad",
       reason: "explicit-ad-controls-marker-present"
     }),
-    300
+    0
   );
 });
 

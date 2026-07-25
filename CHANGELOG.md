@@ -4,6 +4,13 @@ This file records notable changes by extension version. Early versions were not
 tagged, so their entries are reconstructed from commits that changed the
 recorded version.
 
+## 0.2.3 - 2026-07-25
+
+### Fixed
+
+- Muted the tab immediately when MLB.TV exposes its explicit commercial-break
+  marker instead of waiting for an additional confirmation delay.
+
 ## 0.2.2 - 2026-07-25
 
 ### Fixed
