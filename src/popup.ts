@@ -18,6 +18,7 @@ const copyDiagnosticsButton =
   document.querySelector<HTMLButtonElement>("#copy-diagnostics")!;
 const copyStatusElement =
   document.querySelector<HTMLElement>("#copy-status")!;
+let activeTabId: number | null = null;
 let lastPopupState: DiagnosticPopupState | null = null;
 
 const CLASSIFICATION_LABELS: Readonly<
@@ -115,6 +116,7 @@ async function refresh(): Promise<void> {
   const activeTab = await getActiveTab();
 
   if (typeof activeTab?.id !== "number") {
+    activeTabId = null;
     render({
       enabled: false,
       showOverlay: false,
@@ -124,6 +126,7 @@ async function refresh(): Promise<void> {
     return;
   }
 
+  activeTabId = activeTab.id;
   const response = await chrome.runtime.sendMessage({
     type: "get-popup-state",
     tabId: activeTab.id
@@ -144,6 +147,12 @@ async function refresh(): Promise<void> {
     ...state
   };
   render(state);
+}
+
+function handleRefreshError(error: unknown): void {
+  classificationElement.textContent = "Unavailable";
+  reasonElement.textContent =
+    error instanceof Error ? error.message : String(error);
 }
 
 enabledInput.addEventListener("change", async () => {
@@ -183,8 +192,16 @@ copyDiagnosticsButton.addEventListener("click", async () => {
   }
 });
 
-refresh().catch((error: unknown) => {
-  classificationElement.textContent = "Unavailable";
-  reasonElement.textContent =
-    error instanceof Error ? error.message : String(error);
+chrome.storage.onChanged.addListener((changes, areaName) => {
+  if (
+    areaName !== "session" ||
+    activeTabId === null ||
+    !changes[`tab:${activeTabId}`]
+  ) {
+    return;
+  }
+
+  refresh().catch(handleRefreshError);
 });
+
+refresh().catch(handleRefreshError);

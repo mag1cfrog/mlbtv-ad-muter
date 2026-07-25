@@ -6,6 +6,10 @@ const test = require("node:test");
 const assert = require("node:assert/strict");
 const vm = require("node:vm");
 
+type RuntimeMessageListener = (
+  message: DetectorRefreshMessage | TabAudioStateMessage
+) => boolean;
+
 const contentSource = fs.readFileSync(
   path.join(__dirname, "..", "dist", "src", "content.js"),
   "utf8"
@@ -30,6 +34,7 @@ test("confirms sustained transitions and ignores short flickers", async () => {
   let currentClassification: PlayerClassification = "content";
   const detectorMessages: DetectorStateMessage[] = [];
   const observerCallbacks: Array<() => void> = [];
+  let runtimeMessageListener: RuntimeMessageListener | undefined;
   const timers = new Map<number, {
     at: number;
     callback: () => void;
@@ -127,7 +132,9 @@ test("confirms sustained transitions and ignores short flickers", async () => {
           };
         },
         onMessage: {
-          addListener() {}
+          addListener(listener: RuntimeMessageListener) {
+            runtimeMessageListener = listener;
+          }
         },
         sendMessage(message: DetectorStateMessage) {
           detectorMessages.push(message);
@@ -196,6 +203,14 @@ test("confirms sustained transitions and ignores short flickers", async () => {
   assert.equal(stableCount("content"), 0);
   await advance(1);
   assert.equal(stableCount("content"), 1);
+
+  const requestDetectorRefresh = runtimeMessageListener;
+  if (!requestDetectorRefresh) {
+    throw new Error("Missing runtime message listener.");
+  }
+  requestDetectorRefresh({ type: "refresh-detector-state" });
+  await flushPromises();
+  assert.equal(stableCount("content"), 2);
 
   currentClassification = "ad";
   evaluateAfterMutation();
