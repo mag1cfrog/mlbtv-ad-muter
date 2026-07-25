@@ -78,7 +78,6 @@ extension, and reload the stream tab.
 
 - [Architecture](docs/architecture.md)
 - [Privacy](PRIVACY.md)
-- [Player research notes](docs/research-notes.md)
 
 ## Limitations
 

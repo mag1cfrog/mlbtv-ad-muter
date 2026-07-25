@@ -50,6 +50,3 @@ coordinate browser APIs.
 `npm run build` compiles TypeScript and copies the manifest and static assets
 into `dist`, which can be loaded as an unpacked extension. Shared policies are
 loaded as ordered scripts, so no bundler is needed.
-
-Player-specific evidence belongs in
-[`research-notes.md`](research-notes.md).
