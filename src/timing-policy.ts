@@ -3,7 +3,7 @@
 
   const TIMING_MS = Object.freeze({
     debounce: 80,
-    explicitAd: 300,
+    explicitAd: 0,
     heuristicAd: 900,
     content: 2000,
     unknown: 1200,
