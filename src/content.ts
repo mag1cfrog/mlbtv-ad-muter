@@ -281,7 +281,7 @@ type ContentTabAudioState = {
       ? `raw: ${raw} · stable: ${stable} · v${extensionVersion}`
       : `stable: ${stable} · tab: ${
         tabAudioState.tabMuted ? "muted" : "audible"
-        } · player: ${playerAudioState} · source: ${
+        } · video: ${playerAudioState} · source: ${
           tabAudioState.muteSource
         } · v${extensionVersion}`;
   }
@@ -498,13 +498,21 @@ type ContentTabAudioState = {
   }
 
   chrome.runtime.onMessage.addListener((message) => {
-    const audioState = message as TabAudioStateMessage;
+    const runtimeMessage = message as
+      | DetectorRefreshMessage
+      | TabAudioStateMessage;
 
-    if (audioState?.type !== "tab-audio-state") {
+    if (runtimeMessage?.type === "refresh-detector-state") {
+      lastMessageFingerprint = "";
+      evaluatePlayer();
       return false;
     }
 
-    applyTabAudioState(audioState);
+    if (runtimeMessage?.type !== "tab-audio-state") {
+      return false;
+    }
+
+    applyTabAudioState(runtimeMessage);
     return false;
   });
 

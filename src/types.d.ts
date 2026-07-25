@@ -166,6 +166,10 @@ type DetectorStateMessage = Readonly<{
   signals: DetectorSignals;
 }>;
 
+type DetectorRefreshMessage = Readonly<{
+  type: "refresh-detector-state";
+}>;
+
 type TabAudioStateMessage = Readonly<{
   type: "tab-audio-state";
   enabled: boolean;

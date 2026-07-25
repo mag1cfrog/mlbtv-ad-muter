@@ -27,6 +27,10 @@ const SELECTORS = [
 
 type Selector = typeof SELECTORS[number];
 type ElementListener = () => void | Promise<void>;
+type StorageChangeListener = (
+  changes: Record<string, { newValue?: unknown }>,
+  areaName: string
+) => void;
 type TestElement = {
   checked: boolean;
   className: string;
@@ -63,6 +67,8 @@ async function loadPopup(response: PopupRuntimeResponse) {
   ) as Record<Selector, TestElement>;
   const clipboardWrites: string[] = [];
   const storageWrites: Array<Record<string, unknown>> = [];
+  let runtimeResponse = response;
+  let storageChangeListener: StorageChangeListener | undefined;
   const context = vm.createContext({
     chrome: {
       runtime: {
@@ -74,13 +80,18 @@ async function loadPopup(response: PopupRuntimeResponse) {
         async sendMessage(message: PopupStateRequest) {
           assert.equal(message.type, "get-popup-state");
           assert.equal(message.tabId, 7);
-          return response;
+          return runtimeResponse;
         }
       },
       storage: {
         local: {
           async set(values: Record<string, unknown>) {
             storageWrites.push({ ...values });
+          }
+        },
+        onChanged: {
+          addListener(listener: StorageChangeListener) {
+            storageChangeListener = listener;
           }
         }
       },
@@ -112,7 +123,20 @@ async function loadPopup(response: PopupRuntimeResponse) {
 
   return {
     clipboardWrites,
+    dispatchSessionChange(tabId: number) {
+      const listener = storageChangeListener;
+      if (!listener) {
+        throw new Error("Missing storage change listener.");
+      }
+      listener(
+        { [`tab:${tabId}`]: { newValue: {} } },
+        "session"
+      );
+    },
     elements,
+    setResponse(nextResponse: PopupRuntimeResponse) {
+      runtimeResponse = nextResponse;
+    },
     storageWrites
   };
 }
@@ -146,11 +170,26 @@ test("renders state, persists settings, and reports clipboard failure", async ()
   assert.equal(elements["#overlay-mode"].textContent, "Overlay visible");
   assert.equal(elements["#overlay-position"].value, "top-left");
   assert.equal(elements["#classification"].textContent, "Commercial break");
-  assert.match(elements["#reason"].textContent, /commercial-controls marker/);
+  assert.match(elements["#reason"].textContent, /commercial-break marker/);
   assert.match(
     elements["#diagnostic-log"].textContent,
     /navigation: preserve-ad-mute/
   );
+
+  popup.setResponse({
+    enabled: true,
+    showOverlay: true,
+    overlayPosition: "top-left",
+    record: {
+      stableClassification: "content",
+      reason: "rich-playback-controls-present"
+    }
+  });
+  popup.dispatchSessionChange(7);
+  await new Promise((resolve) => setImmediate(resolve));
+
+  assert.equal(elements["#classification"].textContent, "Game content");
+  assert.match(elements["#reason"].textContent, /Rich playback/);
 
   elements["#enabled"].checked = false;
   await elements["#enabled"].dispatch("change");

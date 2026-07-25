@@ -11,7 +11,7 @@ const contentSource = fs.readFileSync(
   "utf8"
 );
 
-test("retries ad muting and renders unavailable player audio", async () => {
+test("retries ad muting and renders unavailable video audio", async () => {
   const detectorMessages: DetectorStateMessage[] = [];
   const overlayDetails = { textContent: "" };
   const overlayHost: {
@@ -169,5 +169,5 @@ test("retries ad muting and renders unavailable player audio", async () => {
   assert.equal(detectorMessages.length, 2);
   assert.equal(detectorMessages[0].stableClassification, "ad");
   assert.equal(detectorMessages[1].stableClassification, "ad");
-  assert.match(overlayDetails.textContent, /player: unavailable/);
+  assert.match(overlayDetails.textContent, /video: unavailable/);
 });

@@ -72,6 +72,7 @@ test("coordinates mute lifecycle, global release, and tab cleanup", async () => 
   const tabId = 7;
   const runtimeId = "test-extension";
   const session: Record<string, TabSessionRecord> = {};
+  const tabMessages: unknown[] = [];
   const tabUpdates: boolean[] = [];
   const listeners: TestListeners = {};
   let muteBarrier: MuteBarrier | null = null;
@@ -161,7 +162,13 @@ test("coordinates mute lifecycle, global release, and tab cleanup", async () => 
         assert.equal(requestedTabId, tabId);
         return tab;
       },
-      async sendMessage() {},
+      async sendMessage(
+        requestedTabId: number,
+        message: unknown
+      ) {
+        assert.equal(requestedTabId, tabId);
+        tabMessages.push(message);
+      },
       async update(
         requestedTabId: number,
         update: { muted: boolean }
@@ -291,6 +298,25 @@ test("coordinates mute lifecycle, global release, and tab cleanup", async () => 
   response = await sendDetectorState("ad");
   assertAudioState(response);
   assert.equal(response.tabMuted, true);
+
+  tabMessages.length = 0;
+  await emitTabUpdate({
+    status: "loading",
+    url: tab.url
+  });
+  assert.equal(session[`tab:${tabId}`]?.stableClassification, "unknown");
+  assert.equal(tab.mutedInfo.muted, true);
+  assert.equal(
+    tabMessages.some(
+      (message) =>
+        (message as DetectorRefreshMessage).type ===
+        "refresh-detector-state"
+    ),
+    true
+  );
+
+  response = await sendDetectorState("ad");
+  assertAudioState(response);
 
   const unsupportedUrl = "https://example.com/";
   tab.url = unsupportedUrl;

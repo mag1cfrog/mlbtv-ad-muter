@@ -106,6 +106,17 @@ async function notifyTabAudioState(
   }
 }
 
+async function requestDetectorState(tabId: number): Promise<void> {
+  try {
+    await chrome.tabs.sendMessage(
+      tabId,
+      { type: "refresh-detector-state" } satisfies DetectorRefreshMessage
+    );
+  } catch {
+    // A new content script will publish its initial state after navigation.
+  }
+}
+
 async function setBadge(
   tabId: number,
   record: TabSessionRecord,
@@ -436,10 +447,11 @@ async function handleNavigation(
     }
   }
 
+  const isSupportedStream = isSupportedStreamUrl(currentUrl || "");
   const preserveAdMute = activeMutePolicy.shouldPreserveAdMuteOnNavigation({
     adMuteLatched: Boolean(previous.adMuteLatched),
     enabled: settings.enabled,
-    isSupportedStream: isSupportedStreamUrl(currentUrl || ""),
+    isSupportedStream,
     manualAdOverride: Boolean(previous.manualAdOverride),
     stableClassification: previous.stableClassification
   });
@@ -466,6 +478,9 @@ async function handleNavigation(
   await setSessionRecord(tabId, next);
   await setBadge(tabId, next, settings.enabled);
   await notifyTabAudioState(tabId, next, settings.enabled);
+  if (isSupportedStream) {
+    await requestDetectorState(tabId);
+  }
 }
 
 async function releaseAllExtensionMutes(): Promise<void> {
