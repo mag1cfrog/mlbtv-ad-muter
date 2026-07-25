@@ -71,6 +71,9 @@ npm test
 Chrome type definitions are development-only dependencies; the compiled
 extension has no third-party runtime dependencies or bundler.
 
+Run `npm run package:release` to test, build, and write a versioned Store ZIP
+to `release/`.
+
 After changing extension files, rebuild the project, reload the unpacked
 extension, and reload the stream tab.
 
