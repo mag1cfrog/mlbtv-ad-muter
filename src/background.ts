@@ -183,15 +183,26 @@ async function releaseMute(
   };
 }
 
+function appendDebugEvent(
+  record: TabSessionRecord,
+  event: DebugEvent
+): DebugEvent[] {
+  const history = Array.isArray(record.debugHistory)
+    ? record.debugHistory
+    : [];
+
+  return [
+    ...history.slice(-(DEBUG_HISTORY_LIMIT - 1)),
+    event
+  ];
+}
+
 function addDebugEvent(
   previous: TabSessionRecord,
   record: TabSessionRecord,
   message: DetectorStateMessage,
   decision: MuteDecision
 ): TabSessionRecord {
-  const history = Array.isArray(previous.debugHistory)
-    ? previous.debugHistory
-    : [];
   const event: DetectorDebugEvent = {
     eventType: "detector-state",
     at: Date.now(),
@@ -212,10 +223,7 @@ function addDebugEvent(
   return {
     ...record,
     lastDecision: decision.action,
-    debugHistory: [
-      ...history.slice(-(DEBUG_HISTORY_LIMIT - 1)),
-      event
-    ]
+    debugHistory: appendDebugEvent(previous, event)
   };
 }
 
@@ -223,9 +231,6 @@ function addMuteDebugEvent(
   record: TabSessionRecord,
   mutedInfo: chrome.tabs.MutedInfo
 ): TabSessionRecord {
-  const history = Array.isArray(record.debugHistory)
-    ? record.debugHistory
-    : [];
   const muteSource = activeMutePolicy.classifyMuteSource(
     mutedInfo,
     chrome.runtime.id
@@ -253,19 +258,13 @@ function addMuteDebugEvent(
         ? true
         : Boolean(record.manualAdOverride),
     updatedAt: event.at,
-    debugHistory: [
-      ...history.slice(-(DEBUG_HISTORY_LIMIT - 1)),
-      event
-    ]
+    debugHistory: appendDebugEvent(record, event)
   };
 }
 
 function addReconciliationDebugEvent(
   record: TabSessionRecord
 ): TabSessionRecord {
-  const history = Array.isArray(record.debugHistory)
-    ? record.debugHistory
-    : [];
   const event: ReconciliationDebugEvent = {
     eventType: "mute-reconciliation",
     at: Date.now(),
@@ -278,10 +277,7 @@ function addReconciliationDebugEvent(
 
   return {
     ...record,
-    debugHistory: [
-      ...history.slice(-(DEBUG_HISTORY_LIMIT - 1)),
-      event
-    ]
+    debugHistory: appendDebugEvent(record, event)
   };
 }
 
@@ -289,9 +285,6 @@ function addNavigationDebugEvent(
   record: TabSessionRecord,
   decision: NavigationDecision
 ): TabSessionRecord {
-  const history = Array.isArray(record.debugHistory)
-    ? record.debugHistory
-    : [];
   const event: NavigationDebugEvent = {
     eventType: "navigation",
     at: Date.now(),
@@ -307,10 +300,7 @@ function addNavigationDebugEvent(
   return {
     ...record,
     lastDecision: decision,
-    debugHistory: [
-      ...history.slice(-(DEBUG_HISTORY_LIMIT - 1)),
-      event
-    ]
+    debugHistory: appendDebugEvent(record, event)
   };
 }
 

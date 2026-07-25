@@ -211,4 +211,10 @@ test("coordinates ad muting, manual override, and navigation release", async () 
     session[`tab:${tabId}`].lastDecision,
     "release-navigation-mute"
   );
+
+  for (let index = 0; index < 40; index += 1) {
+    await sendDetectorState("content");
+  }
+
+  assert.equal(session[`tab:${tabId}`].debugHistory.length, 40);
 });
