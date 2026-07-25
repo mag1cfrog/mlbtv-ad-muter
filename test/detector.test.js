@@ -100,6 +100,60 @@ test("keeps mixed transitional controls unknown", () => {
   assert.equal(result.classification, "unknown");
 });
 
+test("handles detector threshold boundaries safely", () => {
+  const cases = [
+    {
+      name: "missing video overrides an ad marker",
+      overrides: {
+        hasVideo: false,
+        hasAdControls: true
+      },
+      classification: "unknown",
+      confidence: 0
+    },
+    {
+      name: "three non-core rich controls remain transitional",
+      overrides: {
+        hasLivePoint: true,
+        hasBroadcast: true,
+        hasQuality: true
+      },
+      classification: "unknown",
+      confidence: 0.25
+    },
+    {
+      name: "four rich controls identify content",
+      overrides: {
+        hasLivePoint: true,
+        hasBroadcast: true,
+        hasQuality: true,
+        hasFullscreen: true
+      },
+      classification: "content",
+      confidence: 0.8
+    },
+    {
+      name: "one rich control remains a lower-confidence ad",
+      overrides: {
+        hasFullscreen: true
+      },
+      classification: "ad",
+      confidence: 0.75
+    }
+  ];
+
+  for (const scenario of cases) {
+    const result = classifySignals(signals(scenario.overrides));
+
+    assert.equal(
+      result.classification,
+      scenario.classification,
+      scenario.name
+    );
+    assert.equal(result.confidence, scenario.confidence, scenario.name);
+  }
+});
+
 test("collects semantic controls without depending on generated CSS classes", () => {
   const documentRoot = fakeDocument([
     SELECTORS.player,
