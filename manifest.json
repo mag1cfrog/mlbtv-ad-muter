@@ -3,6 +3,12 @@
   "name": "Baseball Break Muter",
   "version": "0.1.10",
   "description": "Locally detects commercial-break player states and can mute the browser tab while commercials continue playing.",
+  "icons": {
+    "16": "src/icons/icon-16.png",
+    "32": "src/icons/icon-32.png",
+    "48": "src/icons/icon-48.png",
+    "128": "src/icons/icon-128.png"
+  },
   "permissions": [
     "storage"
   ],
@@ -13,6 +19,10 @@
     "service_worker": "src/background.js"
   },
   "action": {
+    "default_icon": {
+      "16": "src/icons/icon-16.png",
+      "32": "src/icons/icon-32.png"
+    },
     "default_title": "Baseball Break Muter",
     "default_popup": "src/popup.html"
   },

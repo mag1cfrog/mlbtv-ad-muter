@@ -12,7 +12,9 @@ test("builds every extension file referenced by the manifest", () => {
   const referencedFiles = [
     manifest.background.service_worker,
     manifest.action.default_popup,
-    ...manifest.content_scripts.flatMap((contentScript) => contentScript.js)
+    ...manifest.content_scripts.flatMap((contentScript) => contentScript.js),
+    ...Object.values(manifest.icons),
+    ...Object.values(manifest.action.default_icon)
   ];
 
   for (const file of referencedFiles) {
