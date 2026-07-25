@@ -7,6 +7,11 @@ const assert = require("node:assert/strict");
 
 const dist = path.join(__dirname, "..", "dist");
 const manifest = require("../dist/manifest.json");
+const packageMetadata = require("../package.json");
+
+test("keeps package and extension versions in sync", () => {
+  assert.equal(manifest.version, packageMetadata.version);
+});
 
 test("builds every extension file referenced by the manifest", () => {
   const referencedFiles = [

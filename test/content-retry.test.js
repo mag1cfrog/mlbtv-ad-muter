@@ -35,7 +35,7 @@ test("retries a stable ad state until tab mute is acknowledged", async () => {
       inspect() {
         return {
           classification: "ad",
-          confidence: "high",
+          confidence: 1,
           reason: "explicit-ad-controls-marker-present",
           signals: {
             playerMuted: false
