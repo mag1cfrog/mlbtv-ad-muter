@@ -11,6 +11,7 @@
 
   function decideMuteAction({
     enabled,
+    manualAdOverride = false,
     phase,
     stableClassification
   }) {
@@ -22,6 +23,13 @@
     }
 
     if (stableClassification === "ad") {
+      if (manualAdOverride) {
+        return {
+          action: "hold",
+          reason: "manual-ad-override"
+        };
+      }
+
       return {
         action: "ensure-muted",
         reason: "stable-ad-state"
@@ -62,8 +70,40 @@
     return "unknown";
   }
 
+  function describeTabMuteState(mutedInfo, runtimeId) {
+    const tabMuted = Boolean(mutedInfo?.muted);
+    const muteSource = classifyMuteSource(mutedInfo, runtimeId);
+
+    return {
+      tabMuted,
+      muteSource,
+      mutedByExtension:
+        tabMuted && muteSource === "this-extension",
+      wasMutedBeforeAd:
+        tabMuted && muteSource !== "this-extension"
+    };
+  }
+
+  function shouldRepairUnmute({
+    enabled,
+    manualAdOverride = false,
+    muteSource,
+    stableClassification,
+    tabMuted
+  }) {
+    return (
+      enabled &&
+      stableClassification === "ad" &&
+      tabMuted === false &&
+      muteSource === "this-extension" &&
+      !manualAdOverride
+    );
+  }
+
   return Object.freeze({
     classifyMuteSource,
-    decideMuteAction
+    describeTabMuteState,
+    decideMuteAction,
+    shouldRepairUnmute
   });
 });

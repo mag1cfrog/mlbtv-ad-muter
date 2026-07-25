@@ -12,6 +12,7 @@ function signals(overrides = {}) {
   return {
     hasPlayer: true,
     hasVideo: true,
+    playerMuted: false,
     hasAdControls: false,
     hasPlayPause: true,
     hasVolume: true,
@@ -26,9 +27,10 @@ function signals(overrides = {}) {
   };
 }
 
-function fakeDocument(selectors) {
+function fakeDocument(selectors, { playerMuted = false } = {}) {
   const available = new Set(selectors);
   const scope = {
+    muted: playerMuted,
     querySelector(selector) {
       return available.has(selector) ? scope : null;
     }
@@ -116,6 +118,7 @@ test("collects semantic controls without depending on generated CSS classes", ()
   assert.deepEqual(collectSignals(documentRoot), {
     hasPlayer: true,
     hasVideo: true,
+    playerMuted: false,
     hasAdControls: false,
     hasPlayPause: true,
     hasVolume: true,
@@ -127,4 +130,16 @@ test("collects semantic controls without depending on generated CSS classes", ()
     hasQuality: true,
     hasFullscreen: true
   });
+});
+
+test("collects the player controller's muted state for diagnostics", () => {
+  const documentRoot = fakeDocument(
+    [
+      SELECTORS.player,
+      SELECTORS.video
+    ],
+    { playerMuted: true }
+  );
+
+  assert.equal(collectSignals(documentRoot).playerMuted, true);
 });

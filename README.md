@@ -37,6 +37,8 @@ transitions or copy the full session record. The extension retains at most 40
 transitions in session-only storage. The record contains detector signals and
 mute decisions plus the category responsible for actual tab mute changes, but
 no other extension IDs, media URLs, account data, cookies, or video content.
+It also records whether the player controller itself is muted, which is
+separate from Chrome's tab-level mute.
 
 Enable **Show on-page status** for an optional, noninteractive indicator in the
 bottom-right corner of the supported player page:
@@ -53,6 +55,12 @@ The mute state machine deliberately ignores short candidate and unknown
 transitions after a commercial is confirmed. Audio is restored only after game
 controls remain stable for two seconds, or immediately when auto-muting is
 disabled or the page navigates.
+
+Chrome's current tab mute state is authoritative; cached ownership is never
+enough to skip a mute operation. If an extension-originated unmute occurs while
+the stable state is still `ad`, the background worker repairs it. A manual
+Chrome tab unmute is respected for the remainder of the current ad pod, while
+the next content-to-ad transition enables automatic muting again.
 
 The explicit commercial-controls marker is confirmed for 300 milliseconds.
 The weaker minimal-controls fallback is confirmed for 900 milliseconds.

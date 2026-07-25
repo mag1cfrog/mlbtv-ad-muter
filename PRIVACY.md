@@ -15,8 +15,9 @@ The extension:
 - Holds the current detection and mute state plus the 40 most recent detector
   or tab-mute transitions in session-only extension storage. Mute sources are
   recorded only as this extension, another extension, the user, tab capture, or
-  unknown; other extension IDs are not stored. This local diagnostic history is
-  cleared when the browser session ends and can be copied manually from the
-  popup for troubleshooting.
+  unknown. The diagnostic signals also include whether the player controller is
+  muted, but not its volume level. Other extension IDs are not stored. This
+  local diagnostic history is cleared when the browser session ends and can be
+  copied manually from the popup for troubleshooting.
 
 The supported site receives no additional requests from the extension.

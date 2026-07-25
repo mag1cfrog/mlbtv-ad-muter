@@ -55,6 +55,7 @@ async function notifyTabAudioState(tabId, record, enabled) {
       enabled,
       tabMuted: record.tabMuted,
       mutedByExtension: Boolean(record.mutedByExtension),
+      manualAdOverride: Boolean(record.manualAdOverride),
       muteSource: record.muteSource || "unknown"
     });
   } catch {
@@ -81,17 +82,16 @@ async function setBadge(tabId, record, enabled) {
 }
 
 async function ensureMuted(tabId, record) {
-  if (record.mutedByExtension) {
-    return record;
-  }
-
   const tab = await chrome.tabs.get(tabId);
+  const actualState = mutePolicy.describeTabMuteState(
+    tab.mutedInfo,
+    chrome.runtime.id
+  );
 
-  if (tab.mutedInfo?.muted) {
+  if (actualState.tabMuted) {
     return {
       ...record,
-      mutedByExtension: false,
-      wasMutedBeforeAd: true
+      ...actualState
     };
   }
 
@@ -176,7 +176,8 @@ function addMuteDebugEvent(record, mutedInfo) {
     eventType: "tab-mute-change",
     at: Date.now(),
     tabMuted: Boolean(mutedInfo.muted),
-    muteSource
+    muteSource,
+    stableClassification: record.stableClassification || "unknown"
   };
 
   console.debug("Baseball Break Muter tab audio change", event);
@@ -187,7 +188,36 @@ function addMuteDebugEvent(record, mutedInfo) {
     muteSource,
     mutedByExtension:
       muteSource === "this-extension" && event.tabMuted,
+    manualAdOverride:
+      !event.tabMuted &&
+      muteSource !== "this-extension" &&
+      record.stableClassification === "ad"
+        ? true
+        : Boolean(record.manualAdOverride),
     updatedAt: event.at,
+    debugHistory: [
+      ...history.slice(-(DEBUG_HISTORY_LIMIT - 1)),
+      event
+    ]
+  };
+}
+
+function addReconciliationDebugEvent(record) {
+  const history = Array.isArray(record.debugHistory)
+    ? record.debugHistory
+    : [];
+  const event = {
+    eventType: "mute-reconciliation",
+    at: Date.now(),
+    stableClassification: record.stableClassification,
+    tabMuted: record.tabMuted,
+    muteSource: record.muteSource
+  };
+
+  console.debug("Baseball Break Muter repaired tab audio state", event);
+
+  return {
+    ...record,
     debugHistory: [
       ...history.slice(-(DEBUG_HISTORY_LIMIT - 1)),
       event
@@ -208,8 +238,17 @@ async function handleDetectorState(tabId, message) {
     signals: message.signals,
     updatedAt: Date.now()
   };
+
+  if (
+    message.phase === "stable" &&
+    message.stableClassification === "content"
+  ) {
+    next.manualAdOverride = false;
+  }
+
   const decision = mutePolicy.decideMuteAction({
     enabled: settings.enabled,
+    manualAdOverride: Boolean(next.manualAdOverride),
     phase: message.phase,
     stableClassification: message.stableClassification
   });
@@ -257,7 +296,23 @@ function queueDetectorState(tabId, message) {
 async function handleMuteInfoChange(tabId, mutedInfo) {
   const settings = await chrome.storage.local.get(SETTINGS_DEFAULTS);
   const previous = await getSessionRecord(tabId);
-  const next = addMuteDebugEvent(previous, mutedInfo);
+  let next = addMuteDebugEvent(previous, mutedInfo);
+  const shouldRepairUnmute = mutePolicy.shouldRepairUnmute({
+    enabled: settings.enabled,
+    manualAdOverride: Boolean(next.manualAdOverride),
+    muteSource: next.muteSource,
+    stableClassification: next.stableClassification,
+    tabMuted: next.tabMuted
+  });
+
+  if (shouldRepairUnmute) {
+    next = await ensureMuted(tabId, next);
+    next = {
+      ...next,
+      ...(await getTabMuteState(tabId))
+    };
+    next = addReconciliationDebugEvent(next);
+  }
 
   await setSessionRecord(tabId, next);
   await setBadge(tabId, next, settings.enabled);
@@ -270,6 +325,11 @@ async function handleNavigation(tabId) {
   let next = await releaseMute(tabId, previous);
   next = {
     ...next,
+    phase: "stable",
+    stableClassification: "unknown",
+    rawClassification: "unknown",
+    reason: "navigation",
+    manualAdOverride: false,
     ...(await getTabMuteState(tabId))
   };
 

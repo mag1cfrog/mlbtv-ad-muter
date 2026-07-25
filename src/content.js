@@ -24,6 +24,7 @@
   let tabAudioState = {
     tabMuted: false,
     mutedByExtension: false,
+    manualAdOverride: false,
     muteSource: "unknown"
   };
 
@@ -154,6 +155,8 @@
     if (!isCandidate && stable === "ad") {
       if (tabAudioState.tabMuted) {
         label = "AD · MUTED";
+      } else if (tabAudioState.manualAdOverride) {
+        label = "AD · OVERRIDE";
       } else if (autoMuteEnabled) {
         label = "AD · MUTING";
       } else {
@@ -167,6 +170,8 @@
       ? `raw: ${raw} · stable: ${stable}`
       : `stable: ${stable} · tab: ${
           tabAudioState.tabMuted ? "muted" : "audible"
+        } · player: ${
+          latestInspection.signals.playerMuted ? "muted" : "audible"
         } · source: ${tabAudioState.muteSource}`;
   }
 
@@ -286,6 +291,7 @@
     tabAudioState = {
       tabMuted: message.tabMuted === true,
       mutedByExtension: message.mutedByExtension === true,
+      manualAdOverride: message.manualAdOverride === true,
       muteSource: message.muteSource || "unknown"
     };
     renderOverlay();

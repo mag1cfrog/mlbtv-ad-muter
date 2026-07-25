@@ -48,6 +48,10 @@ function renderDebugHistory(history = []) {
         ].join(" ");
       }
 
+      if (event.eventType === "mute-reconciliation") {
+        return `${time} repaired unintended tab unmute`;
+      }
+
       return [
         time,
         `${event.rawClassification} → ${event.stableClassification}`,

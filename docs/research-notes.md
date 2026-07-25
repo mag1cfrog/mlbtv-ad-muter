@@ -67,6 +67,13 @@ extension, another extension, the user, tab capture, or unknown. An optional
 Shadow DOM overlay can display stable and raw detector states without
 intercepting pointer input.
 
+The player controller's mute button and Chrome's tab mute are independent
+layers. Diagnostics record the player `video.muted` boolean separately. Before
+muting, the background worker checks Chrome's current `mutedInfo` rather than
+trusting cached ownership. An unintended extension-originated unmute is repaired
+when the stable detector state remains `ad`; a user-originated tab unmute is
+treated as an override for the current ad pod.
+
 ## Design boundary
 
 The detector reads only player control elements and their semantic classes. It

@@ -4,7 +4,9 @@ const test = require("node:test");
 const assert = require("node:assert/strict");
 const {
   classifyMuteSource,
-  decideMuteAction
+  describeTabMuteState,
+  decideMuteAction,
+  shouldRepairUnmute
 } = require("../src/mute-policy.js");
 
 function decision(overrides = {}) {
@@ -61,6 +63,19 @@ test("releases mute immediately when auto-muting is disabled", () => {
       stableClassification: "ad"
     }).action,
     "release"
+  );
+});
+
+test("respects a manual tab-unmute override for the current ad pod", () => {
+  assert.deepEqual(
+    decision({
+      manualAdOverride: true,
+      stableClassification: "ad"
+    }),
+    {
+      action: "hold",
+      reason: "manual-ad-override"
+    }
   );
 });
 
@@ -133,5 +148,81 @@ test("preserves user and capture mute-source categories", () => {
   assert.equal(
     classifyMuteSource({ muted: true, reason: "capture" }, "self"),
     "capture"
+  );
+});
+
+test("derives mute ownership from Chrome's actual tab state", () => {
+  assert.deepEqual(
+    describeTabMuteState(
+      {
+        muted: true,
+        reason: "extension",
+        extensionId: "self"
+      },
+      "self"
+    ),
+    {
+      tabMuted: true,
+      muteSource: "this-extension",
+      mutedByExtension: true,
+      wasMutedBeforeAd: false
+    }
+  );
+
+  assert.deepEqual(
+    describeTabMuteState(
+      {
+        muted: false,
+        reason: "extension",
+        extensionId: "self"
+      },
+      "self"
+    ),
+    {
+      tabMuted: false,
+      muteSource: "this-extension",
+      mutedByExtension: false,
+      wasMutedBeforeAd: false
+    }
+  );
+});
+
+test("repairs only an unintended extension-originated unmute during an ad", () => {
+  const stableAd = {
+    enabled: true,
+    manualAdOverride: false,
+    stableClassification: "ad",
+    tabMuted: false
+  };
+
+  assert.equal(
+    shouldRepairUnmute({
+      ...stableAd,
+      muteSource: "this-extension"
+    }),
+    true
+  );
+  assert.equal(
+    shouldRepairUnmute({
+      ...stableAd,
+      muteSource: "user"
+    }),
+    false
+  );
+  assert.equal(
+    shouldRepairUnmute({
+      ...stableAd,
+      manualAdOverride: true,
+      muteSource: "this-extension"
+    }),
+    false
+  );
+  assert.equal(
+    shouldRepairUnmute({
+      ...stableAd,
+      stableClassification: "content",
+      muteSource: "this-extension"
+    }),
+    false
   );
 });

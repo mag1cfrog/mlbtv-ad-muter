@@ -36,10 +36,12 @@
       documentRoot.querySelector(SELECTORS.player) ||
       documentRoot.querySelector(SELECTORS.fallbackPlayer);
     const scope = player || documentRoot;
+    const video = scope.querySelector(SELECTORS.video);
 
     return {
       hasPlayer: Boolean(player),
-      hasVideo: has(scope, SELECTORS.video),
+      hasVideo: Boolean(video),
+      playerMuted: video ? Boolean(video.muted) : null,
       hasAdControls: has(scope, SELECTORS.adControls),
       hasPlayPause: has(scope, SELECTORS.play) || has(scope, SELECTORS.pause),
       hasVolume: has(scope, SELECTORS.mute) || has(scope, SELECTORS.unmute),
