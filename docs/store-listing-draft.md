@@ -6,26 +6,25 @@ Ad Muter for MLB.TV
 
 ## Short description
 
-Locally detects commercial-break player states and can mute the browser tab
-while commercials continue playing.
+Locally detects commercial breaks on MLB.TV and can mute the browser tab while
+commercials continue playing.
 
 ## Single purpose
 
 Give users an optional, reversible way to mute their own browser tab during
-commercial breaks detected from the visible state of a supported baseball web
-player.
+commercial breaks detected from MLB.TV's on-screen video interface.
 
 ## Privacy summary
 
-Player-control presence and the player's muted state are processed locally.
-The extension does not transmit browsing activity, viewing activity, account
-information, or video content. Auto-mute, overlay visibility, and overlay
-position settings are stored in local extension storage. Current detection and
-mute state, generalized mute-source categories, and up to 40 recent transitions
-are stored only for the browser session.
+The presence of on-screen video controls and the video's muted state are
+processed locally. The extension does not transmit browsing activity, viewing
+activity, account information, or video content. Auto-mute, overlay visibility,
+and overlay position settings are stored in local extension storage. Current
+detection and mute state, generalized mute-source categories, and up to 40
+recent transitions are stored only for the browser session.
 
 ## Compatibility and affiliation
 
-Currently compatible with the MLB.TV web player. This is an independent,
+Currently compatible with MLB.TV stream pages. This is an independent,
 unofficial project and is not affiliated with or endorsed by Major League
 Baseball, MLB.TV, any team, or any broadcaster.
