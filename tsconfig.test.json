@@ -1,6 +1,10 @@
 {
   "extends": "./tsconfig.json",
   "compilerOptions": {
+    "lib": [
+      "ES2024",
+      "DOM"
+    ],
     "moduleDetection": "force",
     "noEmit": true,
     "resolveJsonModule": true,

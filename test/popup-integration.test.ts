@@ -23,31 +23,46 @@ const SELECTORS = [
   "#diagnostic-log",
   "#copy-diagnostics",
   "#copy-status"
-];
+] as const;
 
-function createElement() {
-  const listeners = new Map();
+type Selector = typeof SELECTORS[number];
+type ElementListener = () => void | Promise<void>;
+type TestElement = {
+  checked: boolean;
+  className: string;
+  textContent: string;
+  value: string;
+  addEventListener: (type: string, listener: ElementListener) => void;
+  dispatch: (type: string) => void | Promise<void>;
+};
+
+function createElement(): TestElement {
+  const listeners = new Map<string, ElementListener>();
 
   return {
     checked: false,
     className: "",
     textContent: "",
     value: "",
-    addEventListener(type, listener) {
+    addEventListener(type: string, listener: ElementListener) {
       listeners.set(type, listener);
     },
-    dispatch(type) {
-      return listeners.get(type)();
+    dispatch(type: string) {
+      const listener = listeners.get(type);
+      if (!listener) {
+        throw new Error(`Missing ${type} listener.`);
+      }
+      return listener();
     }
   };
 }
 
-async function loadPopup(response) {
+async function loadPopup(response: PopupRuntimeResponse) {
   const elements = Object.fromEntries(
     SELECTORS.map((selector) => [selector, createElement()])
-  );
-  const clipboardWrites = [];
-  const storageWrites = [];
+  ) as Record<Selector, TestElement>;
+  const clipboardWrites: string[] = [];
+  const storageWrites: Array<Record<string, unknown>> = [];
   const context = vm.createContext({
     chrome: {
       runtime: {
@@ -56,7 +71,7 @@ async function loadPopup(response) {
             version: "0.1.10"
           };
         },
-        async sendMessage(message) {
+        async sendMessage(message: PopupStateRequest) {
           assert.equal(message.type, "get-popup-state");
           assert.equal(message.tabId, 7);
           return response;
@@ -64,13 +79,13 @@ async function loadPopup(response) {
       },
       storage: {
         local: {
-          async set(values) {
+          async set(values: Record<string, unknown>) {
             storageWrites.push({ ...values });
           }
         }
       },
       tabs: {
-        async query(query) {
+        async query(query: { active: boolean; currentWindow: boolean }) {
           assert.equal(query.active, true);
           assert.equal(query.currentWindow, true);
           return [{ id: 7 }];
@@ -78,13 +93,13 @@ async function loadPopup(response) {
       }
     },
     document: {
-      querySelector(selector) {
+      querySelector(selector: Selector) {
         return elements[selector];
       }
     },
     navigator: {
       clipboard: {
-        async writeText(value) {
+        async writeText(value: string) {
           clipboardWrites.push(value);
           throw new Error("Clipboard unavailable");
         }
@@ -114,7 +129,11 @@ test("renders state, persists settings, and reports clipboard failure", async ()
         {
           eventType: "navigation",
           at: 0,
-          decision: "preserve-ad-mute"
+          decision: "preserve-ad-mute",
+          adMuteLatched: true,
+          mutedByExtension: true,
+          tabMuted: true,
+          muteSource: "this-extension"
         }
       ]
     }

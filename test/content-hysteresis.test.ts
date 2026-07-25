@@ -11,7 +11,7 @@ const contentSource = fs.readFileSync(
   "utf8"
 );
 
-function inspection(classification) {
+function inspection(classification: PlayerClassification) {
   return {
     classification,
     confidence: 1,
@@ -27,10 +27,13 @@ function inspection(classification) {
 test("confirms sustained transitions and ignores short flickers", async () => {
   let now = 0;
   let nextTimerId = 1;
-  let currentClassification = "content";
-  const detectorMessages = [];
-  const observerCallbacks = [];
-  const timers = new Map();
+  let currentClassification: PlayerClassification = "content";
+  const detectorMessages: DetectorStateMessage[] = [];
+  const observerCallbacks: Array<() => void> = [];
+  const timers = new Map<number, {
+    at: number;
+    callback: () => void;
+  }>();
   const documentRoot = {
     documentElement: {},
     fullscreenElement: null,
@@ -52,7 +55,7 @@ test("confirms sustained transitions and ignores short flickers", async () => {
     await Promise.resolve();
   }
 
-  async function advance(milliseconds) {
+  async function advance(milliseconds: number) {
     const target = now + milliseconds;
 
     while (timers.size) {
@@ -90,7 +93,7 @@ test("confirms sustained transitions and ignores short flickers", async () => {
       getMountTarget() {
         return documentRoot.documentElement;
       },
-      normalizePosition(position) {
+      normalizePosition(position: OverlayPosition | undefined) {
         return position || "bottom-right";
       }
     },
@@ -99,7 +102,9 @@ test("confirms sustained transitions and ignores short flickers", async () => {
         debounce: 5,
         watchdog: 1500
       },
-      confirmationDelayFor({ classification }) {
+      confirmationDelayFor(
+        { classification }: Pick<DetectorClassification, "classification">
+      ) {
         return classification === "ad" ? 100 : 200;
       },
       muteRetryDelay() {
@@ -107,7 +112,7 @@ test("confirms sustained transitions and ignores short flickers", async () => {
       }
     },
     MutationObserver: class {
-      constructor(callback) {
+      constructor(callback: () => void) {
         observerCallbacks.push(callback);
       }
 
@@ -124,7 +129,7 @@ test("confirms sustained transitions and ignores short flickers", async () => {
         onMessage: {
           addListener() {}
         },
-        sendMessage(message) {
+        sendMessage(message: DetectorStateMessage) {
           detectorMessages.push(message);
           const muted =
             message.phase === "stable" &&
@@ -155,7 +160,7 @@ test("confirms sustained transitions and ignores short flickers", async () => {
       }
     },
     clearInterval() {},
-    clearTimeout(timerId) {
+    clearTimeout(timerId: number) {
       timers.delete(timerId);
     },
     console,
@@ -164,7 +169,7 @@ test("confirms sustained transitions and ignores short flickers", async () => {
     setInterval() {
       return 1;
     },
-    setTimeout(callback, delay = 0) {
+    setTimeout(callback: () => void, delay = 0) {
       const timerId = nextTimerId;
       nextTimerId += 1;
       timers.set(timerId, {
@@ -175,7 +180,8 @@ test("confirms sustained transitions and ignores short flickers", async () => {
     }
   });
 
-  const stableCount = (classification) => detectorMessages.filter(
+  const stableCount = (classification: PlayerClassification) =>
+    detectorMessages.filter(
     (message) => (
       message.phase === "stable" &&
       message.stableClassification === classification
