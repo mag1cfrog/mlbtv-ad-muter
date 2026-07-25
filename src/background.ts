@@ -2,26 +2,34 @@
 
 importScripts("mute-policy.js", "overlay-policy.js");
 
-const mutePolicy = globalThis.BaseballBreakMutePolicy;
-const overlayPolicy = globalThis.BaseballBreakOverlayPolicy;
+const extensionGlobals = globalThis as ExtensionGlobals;
+const mutePolicy = extensionGlobals.BaseballBreakMutePolicy;
+const overlayPolicy = extensionGlobals.BaseballBreakOverlayPolicy;
 
 if (!mutePolicy || !overlayPolicy) {
   throw new Error("Baseball Break Muter: background dependencies failed to load.");
 }
 
-const SETTINGS_DEFAULTS = Object.freeze({
+const activeMutePolicy: MutePolicy = mutePolicy;
+const activeOverlayPolicy: OverlayPolicy = overlayPolicy;
+
+const SETTINGS_DEFAULTS: ExtensionSettings = Object.freeze({
   enabled: false,
   showOverlay: false,
-  overlayPosition: overlayPolicy.DEFAULT_POSITION
+  overlayPosition: activeOverlayPolicy.DEFAULT_POSITION
 });
 const DEBUG_HISTORY_LIMIT = 40;
-const detectorQueues = new Map();
+const detectorQueues = new Map<number, Promise<unknown>>();
 
-function sessionKey(tabId) {
+function sessionKey(tabId: number): string {
   return `tab:${tabId}`;
 }
 
-function isSupportedStreamUrl(url) {
+function errorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
+}
+
+function isSupportedStreamUrl(url: string): boolean {
   try {
     const parsed = new URL(url);
 
@@ -35,24 +43,29 @@ function isSupportedStreamUrl(url) {
   }
 }
 
-async function getSessionRecord(tabId) {
+async function getSessionRecord(tabId: number): Promise<TabSessionRecord> {
   const key = sessionKey(tabId);
   const values = await chrome.storage.session.get(key);
-  return values[key] || {};
+  return values[key] as TabSessionRecord | undefined || {};
 }
 
-async function setSessionRecord(tabId, record) {
+async function setSessionRecord(
+  tabId: number,
+  record: TabSessionRecord
+): Promise<void> {
   await chrome.storage.session.set({
     [sessionKey(tabId)]: record
   });
 }
 
-async function getTabMuteState(tabId) {
+async function getTabMuteState(
+  tabId: number
+): Promise<Pick<TabSessionRecord, "tabMuted" | "muteSource">> {
   try {
     const tab = await chrome.tabs.get(tabId);
     return {
       tabMuted: Boolean(tab.mutedInfo?.muted),
-      muteSource: mutePolicy.classifyMuteSource(
+      muteSource: activeMutePolicy.classifyMuteSource(
         tab.mutedInfo,
         chrome.runtime.id
       )
@@ -65,7 +78,10 @@ async function getTabMuteState(tabId) {
   }
 }
 
-function createTabAudioStateMessage(record, enabled) {
+function createTabAudioStateMessage(
+  record: TabSessionRecord,
+  enabled: boolean
+): TabAudioStateMessage {
   return {
     type: "tab-audio-state",
     enabled,
@@ -76,7 +92,11 @@ function createTabAudioStateMessage(record, enabled) {
   };
 }
 
-async function notifyTabAudioState(tabId, record, enabled) {
+async function notifyTabAudioState(
+  tabId: number,
+  record: TabSessionRecord,
+  enabled: boolean
+): Promise<void> {
   try {
     await chrome.tabs.sendMessage(
       tabId,
@@ -87,7 +107,11 @@ async function notifyTabAudioState(tabId, record, enabled) {
   }
 }
 
-async function setBadge(tabId, record, enabled) {
+async function setBadge(
+  tabId: number,
+  record: TabSessionRecord,
+  enabled: boolean
+): Promise<void> {
   let text = "";
   let color = "#64748b";
 
@@ -105,9 +129,12 @@ async function setBadge(tabId, record, enabled) {
   await chrome.action.setBadgeText({ tabId, text });
 }
 
-async function ensureMuted(tabId, record) {
+async function ensureMuted(
+  tabId: number,
+  record: TabSessionRecord
+): Promise<TabSessionRecord> {
   const tab = await chrome.tabs.get(tabId);
-  const actualState = mutePolicy.describeTabMuteState(
+  const actualState = activeMutePolicy.describeTabMuteState(
     tab.mutedInfo,
     chrome.runtime.id
   );
@@ -127,7 +154,10 @@ async function ensureMuted(tabId, record) {
   };
 }
 
-async function releaseMute(tabId, record) {
+async function releaseMute(
+  tabId: number,
+  record: TabSessionRecord
+): Promise<TabSessionRecord> {
   if (!record.mutedByExtension) {
     return {
       ...record,
@@ -156,11 +186,16 @@ async function releaseMute(tabId, record) {
   };
 }
 
-function addDebugEvent(previous, record, message, decision) {
+function addDebugEvent(
+  previous: TabSessionRecord,
+  record: TabSessionRecord,
+  message: DetectorStateMessage,
+  decision: MuteDecision
+): TabSessionRecord {
   const history = Array.isArray(previous.debugHistory)
     ? previous.debugHistory
     : [];
-  const event = {
+  const event: DetectorDebugEvent = {
     eventType: "detector-state",
     at: Date.now(),
     phase: message.phase,
@@ -188,15 +223,18 @@ function addDebugEvent(previous, record, message, decision) {
   };
 }
 
-function addMuteDebugEvent(record, mutedInfo) {
+function addMuteDebugEvent(
+  record: TabSessionRecord,
+  mutedInfo: chrome.tabs.MutedInfo
+): TabSessionRecord {
   const history = Array.isArray(record.debugHistory)
     ? record.debugHistory
     : [];
-  const muteSource = mutePolicy.classifyMuteSource(
+  const muteSource = activeMutePolicy.classifyMuteSource(
     mutedInfo,
     chrome.runtime.id
   );
-  const event = {
+  const event: MuteChangeDebugEvent = {
     eventType: "tab-mute-change",
     at: Date.now(),
     tabMuted: Boolean(mutedInfo.muted),
@@ -226,11 +264,13 @@ function addMuteDebugEvent(record, mutedInfo) {
   };
 }
 
-function addReconciliationDebugEvent(record) {
+function addReconciliationDebugEvent(
+  record: TabSessionRecord
+): TabSessionRecord {
   const history = Array.isArray(record.debugHistory)
     ? record.debugHistory
     : [];
-  const event = {
+  const event: ReconciliationDebugEvent = {
     eventType: "mute-reconciliation",
     at: Date.now(),
     stableClassification: record.stableClassification,
@@ -249,11 +289,14 @@ function addReconciliationDebugEvent(record) {
   };
 }
 
-function addNavigationDebugEvent(record, decision) {
+function addNavigationDebugEvent(
+  record: TabSessionRecord,
+  decision: NavigationDecision
+): TabSessionRecord {
   const history = Array.isArray(record.debugHistory)
     ? record.debugHistory
     : [];
-  const event = {
+  const event: NavigationDebugEvent = {
     eventType: "navigation",
     at: Date.now(),
     decision,
@@ -275,10 +318,15 @@ function addNavigationDebugEvent(record, decision) {
   };
 }
 
-async function handleDetectorState(tabId, message) {
-  const settings = await chrome.storage.local.get(SETTINGS_DEFAULTS);
+async function handleDetectorState(
+  tabId: number,
+  message: DetectorStateMessage
+): Promise<TabAudioStateMessage> {
+  const settings = await chrome.storage.local.get(
+    SETTINGS_DEFAULTS
+  ) as ExtensionSettings;
   const previous = await getSessionRecord(tabId);
-  let next = {
+  let next: TabSessionRecord = {
     ...previous,
     phase: message.phase,
     stableClassification: message.stableClassification,
@@ -299,7 +347,7 @@ async function handleDetectorState(tabId, message) {
     next.adMuteLatched = true;
   }
 
-  const decision = mutePolicy.decideMuteAction({
+  const decision = activeMutePolicy.decideMuteAction({
     enabled: settings.enabled,
     manualAdOverride: Boolean(next.manualAdOverride),
     phase: message.phase,
@@ -323,7 +371,10 @@ async function handleDetectorState(tabId, message) {
   return createTabAudioStateMessage(next, settings.enabled);
 }
 
-function queueTabTask(tabId, task) {
+function queueTabTask<T>(
+  tabId: number,
+  task: () => Promise<T>
+): Promise<T> {
   const previousTask = detectorQueues.get(tabId) || Promise.resolve();
   const nextTask = previousTask
     .catch(() => {})
@@ -340,23 +391,31 @@ function queueTabTask(tabId, task) {
   return nextTask;
 }
 
-function queueDetectorState(tabId, message) {
+function queueDetectorState(
+  tabId: number,
+  message: DetectorStateMessage
+): Promise<TabAudioStateMessage> {
   return queueTabTask(
     tabId,
     () => handleDetectorState(tabId, message)
   );
 }
 
-async function handleMuteInfoChange(tabId, mutedInfo) {
-  const settings = await chrome.storage.local.get(SETTINGS_DEFAULTS);
+async function handleMuteInfoChange(
+  tabId: number,
+  mutedInfo: chrome.tabs.MutedInfo
+): Promise<void> {
+  const settings = await chrome.storage.local.get(
+    SETTINGS_DEFAULTS
+  ) as ExtensionSettings;
   const previous = await getSessionRecord(tabId);
   let next = addMuteDebugEvent(previous, mutedInfo);
-  const shouldRepairUnmute = mutePolicy.shouldRepairUnmute({
+  const shouldRepairUnmute = activeMutePolicy.shouldRepairUnmute({
     enabled: settings.enabled,
     manualAdOverride: Boolean(next.manualAdOverride),
-    muteSource: next.muteSource,
+    muteSource: next.muteSource || "unknown",
     stableClassification: next.stableClassification,
-    tabMuted: next.tabMuted
+    tabMuted: next.tabMuted === true
   });
 
   if (shouldRepairUnmute) {
@@ -373,8 +432,13 @@ async function handleMuteInfoChange(tabId, mutedInfo) {
   await notifyTabAudioState(tabId, next, settings.enabled);
 }
 
-async function handleNavigation(tabId, navigationUrl) {
-  const settings = await chrome.storage.local.get(SETTINGS_DEFAULTS);
+async function handleNavigation(
+  tabId: number,
+  navigationUrl?: string
+): Promise<void> {
+  const settings = await chrome.storage.local.get(
+    SETTINGS_DEFAULTS
+  ) as ExtensionSettings;
   const previous = await getSessionRecord(tabId);
   let currentUrl = navigationUrl;
 
@@ -386,10 +450,10 @@ async function handleNavigation(tabId, navigationUrl) {
     }
   }
 
-  const preserveAdMute = mutePolicy.shouldPreserveAdMuteOnNavigation({
+  const preserveAdMute = activeMutePolicy.shouldPreserveAdMuteOnNavigation({
     adMuteLatched: Boolean(previous.adMuteLatched),
     enabled: settings.enabled,
-    isSupportedStream: isSupportedStreamUrl(currentUrl),
+    isSupportedStream: isSupportedStreamUrl(currentUrl || ""),
     manualAdOverride: Boolean(previous.manualAdOverride),
     stableClassification: previous.stableClassification
   });
@@ -418,10 +482,10 @@ async function handleNavigation(tabId, navigationUrl) {
   await notifyTabAudioState(tabId, next, settings.enabled);
 }
 
-async function releaseAllExtensionMutes() {
-  const allSessionValues = await chrome.storage.session.get(null);
+async function releaseAllExtensionMutes(): Promise<void> {
+  const allSessionValues = await chrome.storage.session.get();
 
-  for (const [key, record] of Object.entries(allSessionValues)) {
+  for (const [key, storedRecord] of Object.entries(allSessionValues)) {
     if (!key.startsWith("tab:")) {
       continue;
     }
@@ -431,6 +495,7 @@ async function releaseAllExtensionMutes() {
       continue;
     }
 
+    const record = storedRecord as TabSessionRecord;
     let next = await releaseMute(tabId, record);
     next = {
       ...next,
@@ -447,7 +512,7 @@ chrome.runtime.onInstalled.addListener(async () => {
   const existing = await chrome.storage.local.get(
     Object.keys(SETTINGS_DEFAULTS)
   );
-  const missingDefaults = {};
+  const missingDefaults: Record<string, boolean | OverlayPosition> = {};
 
   for (const [key, value] of Object.entries(SETTINGS_DEFAULTS)) {
     if (typeof existing[key] !== typeof value) {
@@ -455,7 +520,7 @@ chrome.runtime.onInstalled.addListener(async () => {
     }
   }
 
-  const normalizedOverlayPosition = overlayPolicy.normalizePosition(
+  const normalizedOverlayPosition = activeOverlayPolicy.normalizePosition(
     existing.overlayPosition
   );
   if (existing.overlayPosition !== normalizedOverlayPosition) {
@@ -468,36 +533,48 @@ chrome.runtime.onInstalled.addListener(async () => {
 });
 
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
-  if (message?.type === "detector-state" && sender.tab?.id) {
-    queueDetectorState(sender.tab.id, message)
+  const runtimeMessage = message as DetectorStateMessage | PopupStateRequest;
+  const senderTabId = sender.tab?.id;
+
+  if (
+    runtimeMessage?.type === "detector-state" &&
+    typeof senderTabId === "number"
+  ) {
+    queueDetectorState(senderTabId, runtimeMessage)
       .then(sendResponse)
-      .catch((error) => {
+      .catch((error: unknown) => {
         console.error(error);
         sendResponse({
           type: "detector-error",
-          error: error.message
-        });
+          error: errorMessage(error)
+        } satisfies DetectorErrorMessage);
       });
     return true;
   }
 
-  if (message?.type === "get-popup-state" && Number.isInteger(message.tabId)) {
+  if (
+    runtimeMessage?.type === "get-popup-state" &&
+    Number.isInteger(runtimeMessage.tabId)
+  ) {
     Promise.all([
       chrome.storage.local.get(SETTINGS_DEFAULTS),
-      getSessionRecord(message.tabId)
+      getSessionRecord(runtimeMessage.tabId)
     ])
       .then(([settings, record]) => {
+        const storedSettings = settings as ExtensionSettings;
         sendResponse({
-          enabled: settings.enabled,
-          showOverlay: settings.showOverlay,
-          overlayPosition: overlayPolicy.normalizePosition(
-            settings.overlayPosition
+          enabled: storedSettings.enabled,
+          showOverlay: storedSettings.showOverlay,
+          overlayPosition: activeOverlayPolicy.normalizePosition(
+            storedSettings.overlayPosition
           ),
           record
-        });
+        } satisfies PopupStateResponse);
       })
-      .catch((error) => {
-        sendResponse({ error: error.message });
+      .catch((error: unknown) => {
+        sendResponse({
+          error: errorMessage(error)
+        } satisfies PopupErrorResponse);
       });
     return true;
   }
@@ -516,10 +593,12 @@ chrome.storage.onChanged.addListener((changes, areaName) => {
 });
 
 chrome.tabs.onUpdated.addListener((tabId, changeInfo) => {
-  if (changeInfo.mutedInfo) {
+  const mutedInfo = changeInfo.mutedInfo;
+
+  if (mutedInfo) {
     queueTabTask(
       tabId,
-      () => handleMuteInfoChange(tabId, changeInfo.mutedInfo)
+      () => handleMuteInfoChange(tabId, mutedInfo)
     ).catch(console.error);
   }
 

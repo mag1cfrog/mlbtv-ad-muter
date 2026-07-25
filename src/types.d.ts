@@ -170,7 +170,7 @@ type DetectorStateMessage = Readonly<{
 type TabAudioStateMessage = Readonly<{
   type: "tab-audio-state";
   enabled: boolean;
-  tabMuted: boolean | null;
+  tabMuted: boolean | null | undefined;
   mutedByExtension: boolean;
   manualAdOverride: boolean;
   muteSource: MuteSource;
@@ -186,6 +186,87 @@ type DetectorResponse =
   | TabAudioStateMessage
   | undefined;
 
+type NavigationDecision =
+  | "preserve-ad-mute"
+  | "release-navigation-mute";
+
+type DetectorDebugEvent = Readonly<{
+  eventType: "detector-state";
+  at: number;
+  phase: DetectorPhase;
+  rawClassification: PlayerClassification;
+  stableClassification: PlayerClassification;
+  reason: DetectorReason;
+  decision: MuteAction;
+  decisionReason: MuteDecision["reason"];
+  mutedByExtension: boolean;
+  wasMutedBeforeAd: boolean;
+  tabMuted: boolean | null | undefined;
+  muteSource: MuteSource | undefined;
+  signals: DetectorSignals;
+}>;
+
+type MuteChangeDebugEvent = Readonly<{
+  eventType: "tab-mute-change";
+  at: number;
+  tabMuted: boolean;
+  muteSource: MuteSource;
+  stableClassification: PlayerClassification;
+}>;
+
+type ReconciliationDebugEvent = Readonly<{
+  eventType: "mute-reconciliation";
+  at: number;
+  stableClassification: PlayerClassification | undefined;
+  tabMuted: boolean | null | undefined;
+  muteSource: MuteSource | undefined;
+}>;
+
+type NavigationDebugEvent = Readonly<{
+  eventType: "navigation";
+  at: number;
+  decision: NavigationDecision;
+  adMuteLatched: boolean;
+  mutedByExtension: boolean;
+  tabMuted: boolean | null | undefined;
+  muteSource: MuteSource | undefined;
+}>;
+
+type DebugEvent =
+  | DetectorDebugEvent
+  | MuteChangeDebugEvent
+  | NavigationDebugEvent
+  | ReconciliationDebugEvent;
+
+type TabSessionRecord = {
+  phase?: DetectorPhase;
+  stableClassification?: PlayerClassification;
+  rawClassification?: PlayerClassification;
+  confidence?: number;
+  reason?: DetectorReason | "navigation";
+  signals?: DetectorSignals;
+  updatedAt?: number;
+  tabMuted?: boolean | null;
+  muteSource?: MuteSource;
+  mutedByExtension?: boolean;
+  wasMutedBeforeAd?: boolean;
+  manualAdOverride?: boolean;
+  adMuteLatched?: boolean;
+  lastDecision?: MuteAction | NavigationDecision;
+  debugHistory?: DebugEvent[];
+};
+
+type PopupStateRequest = Readonly<{
+  type: "get-popup-state";
+  tabId: number;
+}>;
+
+type PopupStateResponse = Readonly<ExtensionSettings & {
+  record: TabSessionRecord;
+}>;
+
+type PopupErrorResponse = Readonly<{ error: string }>;
+
 type ExtensionGlobals = typeof globalThis & {
   BaseballBreakDetector?: DetectorPolicy;
   BaseballBreakMutePolicy?: MutePolicy;
@@ -194,3 +275,4 @@ type ExtensionGlobals = typeof globalThis & {
 };
 
 declare const module: { exports: unknown } | undefined;
+declare function importScripts(...urls: string[]): void;
