@@ -8,9 +8,11 @@ const {
   decideMuteAction,
   shouldPreserveAdMuteOnNavigation,
   shouldRepairUnmute
-} = require("../dist/src/mute-policy.js");
+} = require("../dist/src/mute-policy.js") as MutePolicy;
 
-function decision(overrides = {}) {
+function decision(
+  overrides: Partial<DecideMuteActionInput> = {}
+): MuteDecision {
   return decideMuteAction({
     enabled: true,
     phase: "stable",
@@ -89,7 +91,7 @@ test("a full ad-pod sequence cannot unmute on a transient control flicker", () =
     { phase: "candidate", stableClassification: "ad" },
     { phase: "stable", stableClassification: "ad" },
     { phase: "candidate", stableClassification: "ad" }
-  ];
+  ] satisfies readonly Partial<DecideMuteActionInput>[];
 
   const mutedStates = sequence.map((message) => {
     const result = decision(message);
@@ -192,7 +194,7 @@ test("repairs only an unintended extension-originated unmute during an ad", () =
     manualAdOverride: false,
     stableClassification: "ad",
     tabMuted: false
-  };
+  } satisfies Omit<RepairUnmuteInput, "muteSource">;
 
   assert.equal(
     shouldRepairUnmute({
@@ -233,7 +235,7 @@ test("preserves an ad mute across supported stream navigation", () => {
     isSupportedStream: true,
     manualAdOverride: false,
     stableClassification: "unknown"
-  };
+  } satisfies PreserveAdMuteInput;
 
   assert.equal(
     shouldPreserveAdMuteOnNavigation(activeAdNavigation),

@@ -1,0 +1,17 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "moduleDetection": "force",
+    "noEmit": true,
+    "resolveJsonModule": true,
+    "rootDir": ".",
+    "types": [
+      "chrome-types",
+      "node"
+    ]
+  },
+  "include": [
+    "src/types.d.ts",
+    "test/**/*.ts"
+  ]
+}

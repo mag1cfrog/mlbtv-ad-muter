@@ -281,5 +281,4 @@ type ExtensionGlobals = typeof globalThis & {
   MlbTvAdMuterTimingPolicy?: TimingPolicy;
 };
 
-declare const module: { exports: unknown } | undefined;
 declare function importScripts(...urls: string[]): void;

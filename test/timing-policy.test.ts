@@ -6,7 +6,7 @@ const {
   TIMING_MS,
   confirmationDelayFor,
   muteRetryDelay
-} = require("../dist/src/timing-policy.js");
+} = require("../dist/src/timing-policy.js") as TimingPolicy;
 
 test("confirms the explicit commercial marker quickly", () => {
   assert.equal(
