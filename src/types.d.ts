@@ -267,6 +267,17 @@ type PopupStateResponse = Readonly<ExtensionSettings & {
 
 type PopupErrorResponse = Readonly<{ error: string }>;
 
+type PopupRuntimeResponse =
+  | PopupErrorResponse
+  | PopupStateResponse
+  | undefined;
+
+type DiagnosticPopupState = Readonly<PopupStateResponse & {
+  extensionVersion: string;
+  generatedAt: string;
+  tabId: number;
+}>;
+
 type ExtensionGlobals = typeof globalThis & {
   BaseballBreakDetector?: DetectorPolicy;
   BaseballBreakMutePolicy?: MutePolicy;

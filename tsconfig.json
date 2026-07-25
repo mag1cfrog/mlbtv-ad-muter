@@ -1,7 +1,5 @@
 {
   "compilerOptions": {
-    "allowJs": true,
-    "checkJs": false,
     "forceConsistentCasingInFileNames": true,
     "lib": [
       "ES2022",
@@ -18,7 +16,6 @@
     ]
   },
   "include": [
-    "src/**/*.js",
     "src/**/*.ts"
   ]
 }

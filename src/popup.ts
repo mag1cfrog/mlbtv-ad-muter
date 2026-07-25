@@ -1,25 +1,36 @@
 "use strict";
 
-const enabledInput = document.querySelector("#enabled");
-const modeElement = document.querySelector("#mode");
-const showOverlayInput = document.querySelector("#show-overlay");
-const overlayModeElement = document.querySelector("#overlay-mode");
-const overlayPositionInput = document.querySelector("#overlay-position");
-const classificationElement = document.querySelector("#classification");
-const reasonElement = document.querySelector("#reason");
-const dotElement = document.querySelector("#status-dot");
-const diagnosticLogElement = document.querySelector("#diagnostic-log");
-const copyDiagnosticsButton = document.querySelector("#copy-diagnostics");
-const copyStatusElement = document.querySelector("#copy-status");
-let lastPopupState = null;
+const enabledInput = document.querySelector<HTMLInputElement>("#enabled")!;
+const modeElement = document.querySelector<HTMLElement>("#mode")!;
+const showOverlayInput =
+  document.querySelector<HTMLInputElement>("#show-overlay")!;
+const overlayModeElement =
+  document.querySelector<HTMLElement>("#overlay-mode")!;
+const overlayPositionInput =
+  document.querySelector<HTMLSelectElement>("#overlay-position")!;
+const classificationElement =
+  document.querySelector<HTMLElement>("#classification")!;
+const reasonElement = document.querySelector<HTMLElement>("#reason")!;
+const dotElement = document.querySelector<HTMLElement>("#status-dot")!;
+const diagnosticLogElement =
+  document.querySelector<HTMLPreElement>("#diagnostic-log")!;
+const copyDiagnosticsButton =
+  document.querySelector<HTMLButtonElement>("#copy-diagnostics")!;
+const copyStatusElement =
+  document.querySelector<HTMLElement>("#copy-status")!;
+let lastPopupState: DiagnosticPopupState | null = null;
 
-const CLASSIFICATION_LABELS = Object.freeze({
+const CLASSIFICATION_LABELS: Readonly<
+  Record<PlayerClassification, string>
+> = Object.freeze({
   content: "Game content",
   ad: "Commercial break",
   unknown: "Unknown"
 });
 
-const REASON_LABELS = Object.freeze({
+const REASON_LABELS: Readonly<
+  Partial<Record<NonNullable<TabSessionRecord["reason"]>, string>>
+> = Object.freeze({
   "explicit-ad-controls-marker-present":
     "The player’s commercial-controls marker is present.",
   "rich-playback-controls-present":
@@ -30,7 +41,7 @@ const REASON_LABELS = Object.freeze({
   "mixed-or-transitional-controls": "The player appears to be transitioning."
 });
 
-function renderDebugHistory(history = []) {
+function renderDebugHistory(history: readonly DebugEvent[] = []): void {
   if (!history.length) {
     diagnosticLogElement.textContent = "No transitions recorded yet.";
     return;
@@ -72,7 +83,7 @@ function render({
   showOverlay,
   overlayPosition = "bottom-right",
   record = {}
-}) {
+}: PopupStateResponse): void {
   const classification = record.stableClassification || "unknown";
   enabledInput.checked = enabled;
   showOverlayInput.checked = showOverlay;
@@ -86,12 +97,13 @@ function render({
   classificationElement.textContent =
     CLASSIFICATION_LABELS[classification] || "Unknown";
   reasonElement.textContent =
-    REASON_LABELS[record.reason] || "Waiting for player-state evidence.";
+    (record.reason && REASON_LABELS[record.reason]) ||
+    "Waiting for player-state evidence.";
   dotElement.className = `dot ${classification}`;
   renderDebugHistory(record.debugHistory);
 }
 
-async function getActiveTab() {
+async function getActiveTab(): Promise<chrome.tabs.Tab | undefined> {
   const tabs = await chrome.tabs.query({
     active: true,
     currentWindow: true
@@ -99,10 +111,10 @@ async function getActiveTab() {
   return tabs[0];
 }
 
-async function refresh() {
+async function refresh(): Promise<void> {
   const activeTab = await getActiveTab();
 
-  if (!activeTab?.id) {
+  if (typeof activeTab?.id !== "number") {
     render({
       enabled: false,
       showOverlay: false,
@@ -112,10 +124,19 @@ async function refresh() {
     return;
   }
 
-  const state = await chrome.runtime.sendMessage({
+  const response = await chrome.runtime.sendMessage({
     type: "get-popup-state",
     tabId: activeTab.id
-  });
+  } satisfies PopupStateRequest) as PopupRuntimeResponse;
+
+  if (!response) {
+    throw new Error("The background worker did not return popup state.");
+  }
+  if ("error" in response) {
+    throw new Error(response.error);
+  }
+
+  const state = response;
   lastPopupState = {
     extensionVersion: chrome.runtime.getManifest().version,
     generatedAt: new Date().toISOString(),
@@ -125,7 +146,7 @@ async function refresh() {
   render(state);
 }
 
-async function copyText(text) {
+async function copyText(text: string): Promise<void> {
   try {
     await navigator.clipboard.writeText(text);
     return;
@@ -181,7 +202,8 @@ copyDiagnosticsButton.addEventListener("click", async () => {
   }
 });
 
-refresh().catch((error) => {
+refresh().catch((error: unknown) => {
   classificationElement.textContent = "Unavailable";
-  reasonElement.textContent = error.message;
+  reasonElement.textContent =
+    error instanceof Error ? error.message : String(error);
 });

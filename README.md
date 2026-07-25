@@ -107,6 +107,7 @@ Important files:
 - `src/content.ts`: DOM observation and transition hysteresis
 - `src/mute-policy.ts`: pure mute-state decision policy
 - `src/background.ts`: safe tab muting and restoration
+- `src/popup.ts`: popup settings and diagnostics
 - `docs/research-notes.md`: observed player-state evidence
 - `PRIVACY.md`: local data-handling statement
 
