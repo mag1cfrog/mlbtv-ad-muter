@@ -21,7 +21,7 @@
     );
   }
 
-  function holdFor(
+  function confirmationDelayFor(
     inspection: Pick<DetectorClassification, "classification" | "reason">
   ): number {
     if (
@@ -44,7 +44,7 @@
 
   const policy: TimingPolicy = Object.freeze({
     TIMING_MS,
-    holdFor,
+    confirmationDelayFor,
     muteRetryDelay
   });
 

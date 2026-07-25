@@ -57,7 +57,7 @@ test("retries a stable ad state until tab mute is acknowledged", async () => {
         debounce: 1,
         watchdog: 1500
       },
-      holdFor() {
+      confirmationDelayFor() {
         return 0;
       },
       muteRetryDelay() {

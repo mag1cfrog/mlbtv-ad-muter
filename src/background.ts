@@ -19,7 +19,7 @@ const SETTINGS_DEFAULTS: ExtensionSettings = Object.freeze({
   overlayPosition: activeOverlayPolicy.DEFAULT_POSITION
 });
 const DEBUG_HISTORY_LIMIT = 40;
-const detectorQueues = new Map<number, Promise<unknown>>();
+const tabTaskQueues = new Map<number, Promise<unknown>>();
 
 function sessionKey(tabId: number): string {
   return `tab:${tabId}`;
@@ -197,7 +197,7 @@ function appendDebugEvent(
   ];
 }
 
-function addDebugEvent(
+function addDetectorDebugEvent(
   previous: TabSessionRecord,
   record: TabSessionRecord,
   message: DetectorStateMessage,
@@ -350,7 +350,7 @@ async function handleDetectorState(
     ...next,
     ...(await getTabMuteState(tabId))
   };
-  next = addDebugEvent(previous, next, message, decision);
+  next = addDetectorDebugEvent(previous, next, message, decision);
   await setSessionRecord(tabId, next);
   await setBadge(tabId, next, settings.enabled);
   await notifyTabAudioState(tabId, next, settings.enabled);
@@ -361,15 +361,15 @@ function queueTabTask<T>(
   tabId: number,
   task: () => Promise<T>
 ): Promise<T> {
-  const previousTask = detectorQueues.get(tabId) || Promise.resolve();
+  const previousTask = tabTaskQueues.get(tabId) || Promise.resolve();
   const nextTask = previousTask
     .catch(() => {})
     .then(task);
 
-  detectorQueues.set(tabId, nextTask);
+  tabTaskQueues.set(tabId, nextTask);
   const cleanUpQueue = () => {
-    if (detectorQueues.get(tabId) === nextTask) {
-      detectorQueues.delete(tabId);
+    if (tabTaskQueues.get(tabId) === nextTask) {
+      tabTaskQueues.delete(tabId);
     }
   };
   nextTask.then(cleanUpQueue, cleanUpQueue);
@@ -599,6 +599,6 @@ chrome.tabs.onUpdated.addListener((tabId, changeInfo) => {
 });
 
 chrome.tabs.onRemoved.addListener((tabId) => {
-  detectorQueues.delete(tabId);
+  tabTaskQueues.delete(tabId);
   chrome.storage.session.remove(sessionKey(tabId)).catch(() => {});
 });

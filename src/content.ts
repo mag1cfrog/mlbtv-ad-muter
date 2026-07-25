@@ -363,7 +363,7 @@ type ContentTabAudioState = {
     observedFullscreenTarget = nextFullscreenTarget;
   }
 
-  function sendState(
+  function publishDetectorState(
     inspection: DetectorInspection,
     phase: DetectorPhase
   ): void {
@@ -420,7 +420,7 @@ type ContentTabAudioState = {
       candidateSince = now;
     }
 
-    const holdMs = activeTimingPolicy.holdFor(inspection);
+    const holdMs = activeTimingPolicy.confirmationDelayFor(inspection);
     const elapsedMs = now - candidateSince;
 
     if (
@@ -428,17 +428,17 @@ type ContentTabAudioState = {
       elapsedMs >= holdMs
     ) {
       stableClassification = nextClassification;
-      sendState(inspection, "stable");
+      publishDetectorState(inspection, "stable");
       return;
     }
 
     if (nextClassification !== stableClassification) {
-      sendState(inspection, "candidate");
+      publishDetectorState(inspection, "candidate");
       scheduleEvaluation(Math.max(holdMs - elapsedMs, 50));
       return;
     }
 
-    sendState(inspection, "stable");
+    publishDetectorState(inspection, "stable");
   }
 
   const observer = new MutationObserver(() => scheduleEvaluation());

@@ -144,7 +144,7 @@ type TimingPolicy = Readonly<{
     muteRetryMaximum: number;
     watchdog: number;
   }>;
-  holdFor(
+  confirmationDelayFor(
     inspection: Pick<DetectorClassification, "classification" | "reason">
   ): number;
   muteRetryDelay(attempt: number): number;

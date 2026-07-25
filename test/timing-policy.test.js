@@ -4,13 +4,13 @@ const test = require("node:test");
 const assert = require("node:assert/strict");
 const {
   TIMING_MS,
-  holdFor,
+  confirmationDelayFor,
   muteRetryDelay
 } = require("../dist/src/timing-policy.js");
 
 test("confirms the explicit commercial marker quickly", () => {
   assert.equal(
-    holdFor({
+    confirmationDelayFor({
       classification: "ad",
       reason: "explicit-ad-controls-marker-present"
     }),
@@ -20,7 +20,7 @@ test("confirms the explicit commercial marker quickly", () => {
 
 test("requires longer confirmation for heuristic ad detection", () => {
   assert.equal(
-    holdFor({
+    confirmationDelayFor({
       classification: "ad",
       reason: "only-minimal-playback-controls-present"
     }),
@@ -30,7 +30,7 @@ test("requires longer confirmation for heuristic ad detection", () => {
 
 test("requires two seconds of stable content before unmuting", () => {
   assert.equal(
-    holdFor({
+    confirmationDelayFor({
       classification: "content",
       reason: "rich-playback-controls-present"
     }),
