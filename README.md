@@ -1,0 +1,91 @@
+# Baseball Break Muter
+
+Baseball Break Muter is an experimental, local-only Chrome extension that
+detects a commercial-break player layout and can mute the browser tab until
+normal playback controls return.
+
+Commercials continue playing. The extension does not block requests, skip
+content, modify the stream, or interact with authentication, subscriptions,
+blackouts, or DRM.
+
+## Current status
+
+The detector uses a commercial-control marker confirmed during a live
+inning-break transition, with semantic player-control differences as a
+fallback. It defaults to **observation mode**, so installing it does not change
+audio until the user explicitly enables auto-muting.
+
+This is an independent, unofficial project. It is not affiliated with or
+endorsed by Major League Baseball, MLB.TV, any team, or any broadcaster.
+
+## Local installation
+
+1. Open `chrome://extensions`.
+2. Enable **Developer mode**.
+3. Choose **Load unpacked**.
+4. Select this repository directory.
+5. Open the extension popup while viewing a supported stream.
+6. Confirm that the detected state is accurate before enabling auto-muting.
+
+After changing extension files, click **Reload** on the unpacked extension card
+and reload the supported stream tab.
+
+## Diagnostics
+
+Expand **Local diagnostics** in the popup to inspect the ten most recent
+transitions or copy the full session record. The extension retains at most 40
+transitions in session-only storage. The record contains detector signals and
+mute decisions plus the category responsible for actual tab mute changes, but
+no other extension IDs, media URLs, account data, cookies, or video content.
+
+Enable **Show on-page status** for an optional, noninteractive indicator in the
+bottom-right corner of the supported player page:
+
+- Green: stable game content
+- Orange: commercial state and tab mute status
+- Gray: unknown state
+- Pulsing blue: candidate transition, including raw and stable classifications
+
+The overlay is disabled by default, isolated in a Shadow DOM, and uses
+`pointer-events: none` so it cannot intercept player interaction.
+
+The mute state machine deliberately ignores short candidate and unknown
+transitions after a commercial is confirmed. Audio is restored only after game
+controls remain stable for two seconds, or immediately when auto-muting is
+disabled or the page navigates.
+
+The explicit commercial-controls marker is confirmed for 300 milliseconds.
+The weaker minimal-controls fallback is confirmed for 900 milliseconds.
+Player DOM changes trigger checks through a narrowly scoped observer, with a
+1.5-second periodic watchdog as a fallback.
+
+## Development
+
+No build step or third-party runtime dependencies are required.
+
+```text
+npm test
+```
+
+Important files:
+
+- `src/detector.js`: player-state signal collection and pure classification logic
+- `src/timing-policy.js`: asymmetric detector timing policy
+- `src/content.js`: DOM observation and transition hysteresis
+- `src/mute-policy.js`: pure mute-state decision policy
+- `src/background.js`: safe tab muting and restoration
+- `docs/research-notes.md`: observed player-state evidence
+- `PRIVACY.md`: local data-handling statement
+
+## Safety boundaries
+
+- Supported-site access is limited to the MLB.TV path.
+- Detection uses player control state, not video or audio content.
+- Auto-muting is opt-in and reversible.
+- A tab that was muted before a break remains muted afterward.
+- Diagnostic transitions are session-only and bounded to 40 entries.
+- No data leaves the browser.
+
+## License
+
+MIT

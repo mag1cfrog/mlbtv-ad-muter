@@ -1,0 +1,57 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Baseball Break Muter</title>
+    <link rel="stylesheet" href="popup.css">
+  </head>
+  <body>
+    <main>
+      <header>
+        <p class="eyebrow">LOCAL-ONLY CONTROL</p>
+        <h1>Baseball Break Muter</h1>
+      </header>
+
+      <label class="toggle">
+        <input id="enabled" type="checkbox">
+        <span>
+          <strong>Automatically mute breaks</strong>
+          <small id="mode">Observation mode</small>
+        </span>
+      </label>
+
+      <label class="toggle">
+        <input id="show-overlay" type="checkbox">
+        <span>
+          <strong>Show on-page status</strong>
+          <small id="overlay-mode">Overlay hidden</small>
+        </span>
+      </label>
+
+      <section class="status" aria-live="polite">
+        <span id="status-dot" class="dot unknown"></span>
+        <div>
+          <small>Detected player state</small>
+          <strong id="classification">Checking…</strong>
+          <p id="reason">Waiting for the supported player.</p>
+        </div>
+      </section>
+
+      <details class="diagnostics">
+        <summary>Local diagnostics</summary>
+        <p>Recent detector transitions stored only for this browser session.</p>
+        <pre id="diagnostic-log">No transitions recorded yet.</pre>
+        <div class="diagnostic-actions">
+          <button id="copy-diagnostics" type="button">Copy diagnostics</button>
+          <small id="copy-status" aria-live="polite"></small>
+        </div>
+      </details>
+
+      <p class="footnote">
+        Commercials continue playing. Only this browser tab’s audio is changed.
+      </p>
+    </main>
+    <script src="popup.js"></script>
+  </body>
+</html>
