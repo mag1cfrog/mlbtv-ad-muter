@@ -4,6 +4,13 @@ This file records notable changes by extension version. Early versions were not
 tagged, so their entries are reconstructed from commits that changed the
 recorded version.
 
+## 0.2.4 - 2026-07-25
+
+### Fixed
+
+- Detected explicit commercial markers immediately when MLB.TV replaces the
+  inner player instead of waiting for the fallback watchdog.
+
 ## 0.2.3 - 2026-07-25
 
 ### Fixed
