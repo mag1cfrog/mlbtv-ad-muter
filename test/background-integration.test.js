@@ -50,6 +50,7 @@ test("coordinates mute lifecycle, global release, and tab cleanup", async () => 
   const tabUpdates = [];
   const listeners = {};
   let muteBarrier = null;
+  let nextTabUpdateError = null;
   const settings = {
     enabled: true,
     showOverlay: false,
@@ -129,6 +130,12 @@ test("coordinates mute lifecycle, global release, and tab cleanup", async () => 
       async update(requestedTabId, update) {
         assert.equal(requestedTabId, tabId);
 
+        if (nextTabUpdateError) {
+          const error = nextTabUpdateError;
+          nextTabUpdateError = null;
+          throw error;
+        }
+
         if (update.muted && muteBarrier) {
           const barrier = muteBarrier;
           muteBarrier = null;
@@ -189,7 +196,28 @@ test("coordinates mute lifecycle, global release, and tab cleanup", async () => 
     await new Promise((resolve) => setImmediate(resolve));
   }
 
+  tab.mutedInfo = {
+    muted: true,
+    reason: "user"
+  };
   let response = await sendDetectorState("ad");
+  assert.equal(response.tabMuted, true);
+  assert.equal(response.muteSource, "user");
+
+  response = await sendDetectorState("content");
+  assert.equal(response.tabMuted, true);
+  assert.equal(response.muteSource, "user");
+  assert.deepEqual(tabUpdates, []);
+
+  tab.mutedInfo = {
+    muted: false
+  };
+  nextTabUpdateError = new Error("Simulated tab update failure");
+  response = await sendDetectorState("ad");
+  assert.equal(response.type, "detector-error");
+  assert.match(response.error, /Simulated tab update failure/);
+
+  response = await sendDetectorState("ad");
   assert.equal(response.tabMuted, true);
   assert.equal(tab.mutedInfo.extensionId, runtimeId);
 
