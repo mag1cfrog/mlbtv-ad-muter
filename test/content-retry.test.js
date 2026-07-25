@@ -11,17 +11,51 @@ const contentSource = fs.readFileSync(
   "utf8"
 );
 
-test("retries a stable ad state until tab mute is acknowledged", async () => {
+test("retries ad muting and renders unavailable player audio", async () => {
   const detectorMessages = [];
+  const overlayDetails = { textContent: "" };
+  const overlayHost = {
+    dataset: {},
+    isConnected: false,
+    parentNode: null,
+    attachShadow() {
+      const status = { dataset: {} };
+      const label = { textContent: "" };
+
+      return {
+        querySelector(selector) {
+          if (selector === ".status") {
+            return status;
+          }
+          if (selector === "strong") {
+            return label;
+          }
+          return overlayDetails;
+        }
+      };
+    },
+    remove() {
+      this.isConnected = false;
+      this.parentNode = null;
+    }
+  };
   const observer = {
     disconnect() {},
     observe() {}
   };
   const documentRoot = {
-    documentElement: {},
+    documentElement: {
+      appendChild(element) {
+        element.isConnected = true;
+        element.parentNode = this;
+      }
+    },
     fullscreenElement: null,
     webkitFullscreenElement: null,
     addEventListener() {},
+    createElement() {
+      return overlayHost;
+    },
     querySelector() {
       return null;
     }
@@ -38,7 +72,7 @@ test("retries a stable ad state until tab mute is acknowledged", async () => {
           confidence: 1,
           reason: "explicit-ad-controls-marker-present",
           signals: {
-            playerMuted: false
+            playerMuted: null
           }
         };
       }
@@ -101,7 +135,7 @@ test("retries a stable ad state until tab mute is acknowledged", async () => {
           get() {
             return Promise.resolve({
               enabled: true,
-              showOverlay: false,
+              showOverlay: true,
               overlayPosition: "bottom-right"
             });
           }
@@ -127,4 +161,5 @@ test("retries a stable ad state until tab mute is acknowledged", async () => {
   assert.equal(detectorMessages.length, 2);
   assert.equal(detectorMessages[0].stableClassification, "ad");
   assert.equal(detectorMessages[1].stableClassification, "ad");
+  assert.match(overlayDetails.textContent, /player: unavailable/);
 });
