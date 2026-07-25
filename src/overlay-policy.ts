@@ -42,7 +42,7 @@
 
   (
     globalThis as typeof globalThis & {
-      BaseballBreakOverlayPolicy: OverlayPolicy;
+      MlbTvAdMuterOverlayPolicy: OverlayPolicy;
     }
-  ).BaseballBreakOverlayPolicy = policy;
+  ).MlbTvAdMuterOverlayPolicy = policy;
 })();

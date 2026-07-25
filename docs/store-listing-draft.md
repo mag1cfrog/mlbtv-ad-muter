@@ -2,7 +2,7 @@
 
 ## Name
 
-Baseball Break Muter
+Ad Muter for MLB.TV
 
 ## Short description
 

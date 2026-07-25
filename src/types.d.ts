@@ -275,10 +275,10 @@ type DiagnosticPopupState = Readonly<PopupStateResponse & {
 }>;
 
 type ExtensionGlobals = typeof globalThis & {
-  BaseballBreakDetector?: DetectorPolicy;
-  BaseballBreakMutePolicy?: MutePolicy;
-  BaseballBreakOverlayPolicy?: OverlayPolicy;
-  BaseballBreakTimingPolicy?: TimingPolicy;
+  MlbTvAdMuterDetector?: DetectorPolicy;
+  MlbTvAdMuterMutePolicy?: MutePolicy;
+  MlbTvAdMuterOverlayPolicy?: OverlayPolicy;
+  MlbTvAdMuterTimingPolicy?: TimingPolicy;
 };
 
 declare const module: { exports: unknown } | undefined;

@@ -1,6 +1,6 @@
-# Baseball Break Muter
+# Ad Muter for MLB.TV
 
-Baseball Break Muter is an experimental, local-only Chrome extension that
+Ad Muter for MLB.TV is an experimental, local-only Chrome extension that
 detects a commercial-break player layout and can mute the browser tab until
 normal playback controls return.
 

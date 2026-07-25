@@ -1,5 +1,5 @@
 {
-  "name": "baseball-break-muter",
+  "name": "mlbtv-ad-muter",
   "version": "0.1.10",
   "private": true,
   "description": "A local-only Chrome extension that detects commercial-break player states and mutes the tab.",

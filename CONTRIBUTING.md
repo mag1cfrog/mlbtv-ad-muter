@@ -1,6 +1,6 @@
 # Contributing
 
-Thanks for helping improve Baseball Break Muter.
+Thanks for helping improve Ad Muter for MLB.TV.
 
 ## Development principles
 

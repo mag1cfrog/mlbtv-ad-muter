@@ -167,8 +167,8 @@ test("coordinates mute lifecycle, global release, and tab cleanup", async () => 
   vm.runInContext(
     backgroundSource,
     vm.createContext({
-      BaseballBreakMutePolicy: mutePolicy,
-      BaseballBreakOverlayPolicy: overlayPolicy,
+      MlbTvAdMuterMutePolicy: mutePolicy,
+      MlbTvAdMuterOverlayPolicy: overlayPolicy,
       URL,
       chrome,
       console: {

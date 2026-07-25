@@ -14,13 +14,13 @@ type ContentTabAudioState = {
   "use strict";
 
   const extensionGlobals = globalThis as ExtensionGlobals;
-  const detector = extensionGlobals.BaseballBreakDetector;
-  const overlayPolicy = extensionGlobals.BaseballBreakOverlayPolicy;
-  const timingPolicy = extensionGlobals.BaseballBreakTimingPolicy;
+  const detector = extensionGlobals.MlbTvAdMuterDetector;
+  const overlayPolicy = extensionGlobals.MlbTvAdMuterOverlayPolicy;
+  const timingPolicy = extensionGlobals.MlbTvAdMuterTimingPolicy;
   const extensionVersion = chrome.runtime.getManifest().version;
 
   if (!detector || !overlayPolicy || !timingPolicy) {
-    console.error("Baseball Break Muter: detector dependencies failed to load.");
+    console.error("Ad Muter for MLB.TV: detector dependencies failed to load.");
     return;
   }
 
@@ -126,7 +126,7 @@ type ContentTabAudioState = {
     }
 
     overlayHost = document.createElement("div");
-    overlayHost.id = "baseball-break-muter-overlay-host";
+    overlayHost.id = "mlbtv-ad-muter-overlay-host";
     overlayHost.dataset.position = position;
     const shadow = overlayHost.attachShadow({ mode: "open" });
     shadow.innerHTML = `

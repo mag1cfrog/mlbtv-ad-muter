@@ -128,7 +128,7 @@
 
   (
     globalThis as typeof globalThis & {
-      BaseballBreakDetector: DetectorPolicy;
+      MlbTvAdMuterDetector: DetectorPolicy;
     }
-  ).BaseballBreakDetector = detector;
+  ).MlbTvAdMuterDetector = detector;
 })();

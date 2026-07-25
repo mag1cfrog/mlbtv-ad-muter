@@ -3,11 +3,11 @@
 importScripts("mute-policy.js", "overlay-policy.js");
 
 const extensionGlobals = globalThis as ExtensionGlobals;
-const mutePolicy = extensionGlobals.BaseballBreakMutePolicy;
-const overlayPolicy = extensionGlobals.BaseballBreakOverlayPolicy;
+const mutePolicy = extensionGlobals.MlbTvAdMuterMutePolicy;
+const overlayPolicy = extensionGlobals.MlbTvAdMuterOverlayPolicy;
 
 if (!mutePolicy || !overlayPolicy) {
-  throw new Error("Baseball Break Muter: background dependencies failed to load.");
+  throw new Error("Ad Muter for MLB.TV: background dependencies failed to load.");
 }
 
 const activeMutePolicy: MutePolicy = mutePolicy;
@@ -218,7 +218,7 @@ function addDetectorDebugEvent(
     signals: message.signals
   };
 
-  console.debug("Baseball Break Muter transition", event);
+  console.debug("Ad Muter for MLB.TV transition", event);
 
   return {
     ...record,
@@ -243,7 +243,7 @@ function addMuteDebugEvent(
     stableClassification: record.stableClassification || "unknown"
   };
 
-  console.debug("Baseball Break Muter tab audio change", event);
+  console.debug("Ad Muter for MLB.TV tab audio change", event);
 
   return {
     ...record,
@@ -273,7 +273,7 @@ function addReconciliationDebugEvent(
     muteSource: record.muteSource
   };
 
-  console.debug("Baseball Break Muter repaired tab audio state", event);
+  console.debug("Ad Muter for MLB.TV repaired tab audio state", event);
 
   return {
     ...record,
@@ -295,7 +295,7 @@ function addNavigationDebugEvent(
     muteSource: record.muteSource
   };
 
-  console.debug("Baseball Break Muter navigation audio policy", event);
+  console.debug("Ad Muter for MLB.TV navigation audio policy", event);
 
   return {
     ...record,

@@ -54,7 +54,7 @@
 
   (
     globalThis as typeof globalThis & {
-      BaseballBreakTimingPolicy: typeof policy;
+      MlbTvAdMuterTimingPolicy: typeof policy;
     }
-  ).BaseballBreakTimingPolicy = policy;
+  ).MlbTvAdMuterTimingPolicy = policy;
 })();

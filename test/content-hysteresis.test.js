@@ -76,7 +76,7 @@ test("confirms sustained transitions and ignores short flickers", async () => {
   }
 
   const context = vm.createContext({
-    BaseballBreakDetector: {
+    MlbTvAdMuterDetector: {
       SELECTORS: {
         player: ".player",
         fallbackPlayer: "video"
@@ -85,7 +85,7 @@ test("confirms sustained transitions and ignores short flickers", async () => {
         return inspection(currentClassification);
       }
     },
-    BaseballBreakOverlayPolicy: {
+    MlbTvAdMuterOverlayPolicy: {
       DEFAULT_POSITION: "bottom-right",
       getMountTarget() {
         return documentRoot.documentElement;
@@ -94,7 +94,7 @@ test("confirms sustained transitions and ignores short flickers", async () => {
         return position || "bottom-right";
       }
     },
-    BaseballBreakTimingPolicy: {
+    MlbTvAdMuterTimingPolicy: {
       TIMING_MS: {
         debounce: 5,
         watchdog: 1500

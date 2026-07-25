@@ -1,6 +1,6 @@
 # Privacy
 
-Baseball Break Muter processes a small set of player-control signals locally in
+Ad Muter for MLB.TV processes a small set of player-control signals locally in
 the browser to distinguish normal playback from a possible commercial break.
 
 The extension:

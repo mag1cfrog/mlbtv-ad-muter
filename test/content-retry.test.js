@@ -61,7 +61,7 @@ test("retries ad muting and renders unavailable player audio", async () => {
     }
   };
   const context = vm.createContext({
-    BaseballBreakDetector: {
+    MlbTvAdMuterDetector: {
       SELECTORS: {
         player: ".player",
         fallbackPlayer: "video"
@@ -77,7 +77,7 @@ test("retries ad muting and renders unavailable player audio", async () => {
         };
       }
     },
-    BaseballBreakOverlayPolicy: {
+    MlbTvAdMuterOverlayPolicy: {
       DEFAULT_POSITION: "bottom-right",
       getMountTarget() {
         return documentRoot.documentElement;
@@ -86,7 +86,7 @@ test("retries ad muting and renders unavailable player audio", async () => {
         return position || "bottom-right";
       }
     },
-    BaseballBreakTimingPolicy: {
+    MlbTvAdMuterTimingPolicy: {
       TIMING_MS: {
         debounce: 1,
         watchdog: 1500

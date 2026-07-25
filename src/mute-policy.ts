@@ -125,7 +125,7 @@
 
   (
     globalThis as typeof globalThis & {
-      BaseballBreakMutePolicy: MutePolicy;
+      MlbTvAdMuterMutePolicy: MutePolicy;
     }
-  ).BaseballBreakMutePolicy = policy;
+  ).MlbTvAdMuterMutePolicy = policy;
 })();
