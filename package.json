@@ -5,7 +5,8 @@
   "description": "A local-only Chrome extension that detects commercial-break player states and mutes the tab.",
   "scripts": {
     "build": "node scripts/build.js",
-    "test": "npm run build && node --test"
+    "test": "npm run build && node --test",
+    "package:release": "sh scripts/package-release.sh"
   },
   "engines": {
     "node": ">=22"
