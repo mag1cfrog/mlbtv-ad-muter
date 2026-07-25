@@ -76,6 +76,7 @@ extension, and reload the stream tab.
 
 ## Documentation
 
+- [Changelog](CHANGELOG.md)
 - [Architecture](docs/architecture.md)
 - [Privacy](PRIVACY.md)
 
