@@ -76,7 +76,6 @@ extension, and reload the stream tab.
 
 ## Documentation
 
-- [Contributing](CONTRIBUTING.md)
 - [Architecture](docs/architecture.md)
 - [Privacy](PRIVACY.md)
 - [Player research notes](docs/research-notes.md)

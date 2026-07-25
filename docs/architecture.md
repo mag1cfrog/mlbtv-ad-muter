@@ -52,5 +52,4 @@ into `dist`, which can be loaded as an unpacked extension. Shared policies are
 loaded as ordered scripts, so no bundler is needed.
 
 Player-specific evidence belongs in
-[`research-notes.md`](research-notes.md). Development requirements belong in
-[`CONTRIBUTING.md`](../CONTRIBUTING.md).
+[`research-notes.md`](research-notes.md).
