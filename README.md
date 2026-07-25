@@ -42,7 +42,7 @@ Requires Node.js 22 or newer.
 ## Use
 
 1. Open a stream at `https://www.mlb.com/tv/`.
-2. Open the extension popup and confirm the detected player state.
+2. Open the extension popup and confirm the detected playback state.
 3. Enable **Automatically mute breaks**.
 
 Auto-muting is off by default. The optional on-page status overlay can be
@@ -50,9 +50,10 @@ enabled from the popup.
 
 ## Why trust it?
 
-- Site access is limited to the MLB.TV web player.
-- Detection uses player controls, not video frames, audio, cookies, or account
-  data.
+- Site access is limited to MLB.TV stream pages.
+- Detection checks MLB.TV's on-screen video interface for controls such as
+  play, volume, captions, and settings. It does not inspect video frames,
+  audio, cookies, or account data.
 - Settings and bounded diagnostics stay in Chrome extension storage.
 - No data is sent to the developer or any third party.
 - Existing user mute choices and manual unmute overrides are respected.
@@ -85,8 +86,8 @@ extension, and reload the stream tab.
 
 ## Limitations
 
-Detection depends on the current MLB.TV player controls and may require updates
-when the player changes.
+Detection depends on the layout and labels of MLB.TV's on-screen video
+interface and may require updates when the website changes.
 
 This is an independent, unofficial project. It is not affiliated with or
 endorsed by Major League Baseball, MLB.TV, any team, or any broadcaster.
