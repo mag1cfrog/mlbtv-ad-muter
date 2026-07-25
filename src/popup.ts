@@ -33,13 +33,15 @@ const REASON_LABELS: Readonly<
   Partial<Record<NonNullable<TabSessionRecord["reason"]>, string>>
 > = Object.freeze({
   "explicit-ad-controls-marker-present":
-    "The player’s commercial-controls marker is present.",
+    "An on-screen commercial-break marker is present.",
   "rich-playback-controls-present":
     "Rich playback and live controls are present.",
   "only-minimal-playback-controls-present":
     "Only basic pause and volume controls are present.",
-  "player-or-video-missing": "The supported player is not currently available.",
-  "mixed-or-transitional-controls": "The player appears to be transitioning."
+  "player-or-video-missing":
+    "The supported video interface is not currently available.",
+  "mixed-or-transitional-controls":
+    "The video interface appears to be transitioning."
 });
 
 function renderDebugHistory(history: readonly DebugEvent[] = []): void {
@@ -99,7 +101,7 @@ function render({
     CLASSIFICATION_LABELS[classification] || "Unknown";
   reasonElement.textContent =
     (record.reason && REASON_LABELS[record.reason]) ||
-    "Waiting for player-state evidence.";
+    "Waiting for on-screen video evidence.";
   dotElement.className = `dot ${classification}`;
   renderDebugHistory(record.debugHistory);
 }

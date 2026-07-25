@@ -281,7 +281,7 @@ type ContentTabAudioState = {
       ? `raw: ${raw} · stable: ${stable} · v${extensionVersion}`
       : `stable: ${stable} · tab: ${
         tabAudioState.tabMuted ? "muted" : "audible"
-        } · player: ${playerAudioState} · source: ${
+        } · video: ${playerAudioState} · source: ${
           tabAudioState.muteSource
         } · v${extensionVersion}`;
   }

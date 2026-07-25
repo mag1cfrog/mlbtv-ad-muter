@@ -170,7 +170,7 @@ test("renders state, persists settings, and reports clipboard failure", async ()
   assert.equal(elements["#overlay-mode"].textContent, "Overlay visible");
   assert.equal(elements["#overlay-position"].value, "top-left");
   assert.equal(elements["#classification"].textContent, "Commercial break");
-  assert.match(elements["#reason"].textContent, /commercial-controls marker/);
+  assert.match(elements["#reason"].textContent, /commercial-break marker/);
   assert.match(
     elements["#diagnostic-log"].textContent,
     /navigation: preserve-ad-mute/

@@ -4,6 +4,18 @@ This file records notable changes by extension version. Early versions were not
 tagged, so their entries are reconstructed from commits that changed the
 recorded version.
 
+## 0.2.2 - 2026-07-25
+
+### Fixed
+
+- Kept popup state synchronized with the on-page status through stream
+  transitions and navigation.
+
+### Changed
+
+- Replaced ambiguous player-state wording in the popup and on-page diagnostics
+  with video-interface wording.
+
 ## 0.2.1 - 2026-07-25
 
 ### Changed
