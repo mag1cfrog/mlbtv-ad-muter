@@ -24,9 +24,7 @@ or DRM.
 
 ### Chrome Web Store
 
-Coming soon.
-
-<!-- Add the Chrome Web Store install link here after publication. -->
+[Install from the Chrome Web Store](https://chromewebstore.google.com/detail/ad-muter-for-mlbtv/alombkoifhmcejnfgcdgdphlgpdllodc).
 
 ### Load unpacked
 
