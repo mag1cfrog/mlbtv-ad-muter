@@ -4,6 +4,14 @@ This file records notable changes by extension version. Early versions were not
 tagged, so their entries are reconstructed from commits that changed the
 recorded version.
 
+## Unreleased
+
+### Added
+
+- Added a Firefox and Zen package with shared detection, mute logic, and UI.
+- Added separate browser startup paths, Firefox manifest validation, and
+  background lifecycle tests for both packages.
+
 ## 0.2.4 - 2026-07-25
 
 ### Fixed

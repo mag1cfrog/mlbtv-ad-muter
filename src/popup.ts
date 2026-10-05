@@ -135,7 +135,7 @@ async function refresh(): Promise<void> {
   } satisfies PopupStateRequest) as PopupRuntimeResponse;
 
   if (!response) {
-    throw new Error("The background worker did not return popup state.");
+    throw new Error("The background script did not return popup state.");
   }
   if ("error" in response) {
     throw new Error(response.error);

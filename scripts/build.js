@@ -6,6 +6,7 @@ const { execFileSync } = require("node:child_process");
 
 const root = path.resolve(__dirname, "..");
 const dist = path.join(root, "dist");
+const firefoxDist = path.join(root, "dist-firefox");
 const tsc = path.join(
   path.dirname(require.resolve("typescript/package.json")),
   "bin",
@@ -13,6 +14,7 @@ const tsc = path.join(
 );
 
 fs.rmSync(dist, { recursive: true, force: true });
+fs.rmSync(firefoxDist, { recursive: true, force: true });
 execFileSync(
   process.execPath,
   [tsc],
@@ -26,3 +28,12 @@ fs.cpSync(path.join(root, "src"), path.join(dist, "src"), {
   recursive: true,
   filter: (source) => !/\.[jt]s$/.test(source)
 });
+
+fs.cpSync(dist, firefoxDist, { recursive: true });
+fs.writeFileSync(
+  path.join(firefoxDist, "manifest.json"),
+  JSON.stringify({
+    ...require("../manifest.json"),
+    ...require("../manifest.firefox.json")
+  }, null, 2) + "\n"
+);

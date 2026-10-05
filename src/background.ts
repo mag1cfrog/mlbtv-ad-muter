@@ -1,7 +1,5 @@
 "use strict";
 
-importScripts("mute-policy.js", "overlay-policy.js");
-
 const extensionGlobals = globalThis as ExtensionGlobals;
 const mutePolicy = extensionGlobals.MlbTvAdMuterMutePolicy;
 const overlayPolicy = extensionGlobals.MlbTvAdMuterOverlayPolicy;

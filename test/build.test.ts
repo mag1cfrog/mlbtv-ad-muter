@@ -5,32 +5,42 @@ const path = require("node:path");
 const test = require("node:test");
 const assert = require("node:assert/strict");
 
-const dist = path.join(__dirname, "..", "dist");
-const manifest = require("../dist/manifest.json") as typeof import(
-  "../manifest.json"
-);
 const packageMetadata = require("../package.json") as typeof import(
   "../package.json"
 );
+type BuiltManifest = Omit<typeof import("../manifest.json"), "background"> & {
+  background: { service_worker?: string; scripts?: string[] };
+};
 
-test("keeps package and extension versions in sync", () => {
-  assert.equal(manifest.version, packageMetadata.version);
-});
+for (const buildDirectory of ["dist", "dist-firefox"]) {
+  const dist = path.join(__dirname, "..", buildDirectory);
+  const manifest = JSON.parse(
+    fs.readFileSync(path.join(dist, "manifest.json"), "utf8")
+  ) as BuiltManifest;
 
-test("builds every extension file referenced by the manifest", () => {
-  const referencedFiles = [
-    manifest.background.service_worker,
-    manifest.action.default_popup,
-    ...manifest.content_scripts.flatMap((contentScript) => contentScript.js),
-    ...Object.values(manifest.icons),
-    ...Object.values(manifest.action.default_icon)
-  ];
+  test(`${buildDirectory}: keeps package and extension versions in sync`, () => {
+    assert.equal(manifest.version, packageMetadata.version);
+  });
 
-  for (const file of referencedFiles) {
-    assert.equal(
-      fs.existsSync(path.join(dist, file)),
-      true,
-      `Missing built extension file: ${file}`
-    );
-  }
-});
+  test(`${buildDirectory}: builds every file referenced by the manifest`, () => {
+    const backgroundFiles = manifest.background.service_worker
+      ? [manifest.background.service_worker]
+      : manifest.background.scripts || [];
+    assert.ok(backgroundFiles.length);
+    const referencedFiles = [
+      ...backgroundFiles,
+      manifest.action.default_popup,
+      ...manifest.content_scripts.flatMap((contentScript) => contentScript.js),
+      ...Object.values(manifest.icons),
+      ...Object.values(manifest.action.default_icon)
+    ];
+
+    for (const file of referencedFiles) {
+      assert.equal(
+        fs.existsSync(path.join(dist, file)),
+        true,
+        `Missing built extension file: ${file}`
+      );
+    }
+  });
+}

@@ -6,15 +6,6 @@ const test = require("node:test");
 const assert = require("node:assert/strict");
 const vm = require("node:vm");
 
-const backgroundSource = fs.readFileSync(
-  path.join(__dirname, "..", "dist", "src", "background.js"),
-  "utf8"
-);
-const mutePolicy =
-  require("../dist/src/mute-policy.js") as MutePolicy;
-const overlayPolicy =
-  require("../dist/src/overlay-policy.js") as OverlayPolicy;
-
 type TestDetectorResponse = Exclude<DetectorResponse, undefined>;
 type MessageListener = (
   message: DetectorStateMessage,
@@ -68,7 +59,7 @@ function detectorState(
   };
 }
 
-test("coordinates mute lifecycle, global release, and tab cleanup", async () => {
+async function exerciseMuteLifecycle(buildDirectory: string): Promise<void> {
   const tabId = 7;
   const runtimeId = "test-extension";
   const session: Record<string, TabSessionRecord> = {};
@@ -209,20 +200,45 @@ test("coordinates mute lifecycle, global release, and tab cleanup", async () => 
     }
   };
 
-  vm.runInContext(
-    backgroundSource,
-    vm.createContext({
-      MlbTvAdMuterMutePolicy: mutePolicy,
-      MlbTvAdMuterOverlayPolicy: overlayPolicy,
+  function startBackground(): void {
+    const extensionRoot = path.join(__dirname, "..", buildDirectory);
+    const manifest = JSON.parse(
+      fs.readFileSync(path.join(extensionRoot, "manifest.json"), "utf8")
+    ) as { background: { service_worker?: string; scripts?: string[] } };
+    const context = vm.createContext({
       URL,
       chrome,
       console: {
         debug() {},
         error() {}
-      },
-      importScripts() {}
-    })
-  );
+      }
+    });
+
+    function runScript(file: string): void {
+      vm.runInContext(
+        fs.readFileSync(path.join(extensionRoot, file), "utf8"),
+        context,
+        { filename: file }
+      );
+    }
+
+    const worker = manifest.background.service_worker;
+    if (worker) {
+      context.importScripts = (...urls: string[]) => {
+        for (const url of urls) {
+          runScript(path.posix.join(path.posix.dirname(worker), url));
+        }
+      };
+      runScript(worker);
+    } else {
+      assert.ok(manifest.background.scripts?.length);
+      for (const script of manifest.background.scripts!) {
+        runScript(script);
+      }
+    }
+  }
+
+  startBackground();
 
   function sendDetectorState(classification: PlayerClassification) {
     return new Promise<TestDetectorResponse>((resolve) => {
@@ -299,6 +315,8 @@ test("coordinates mute lifecycle, global release, and tab cleanup", async () => 
   assertAudioState(response);
   assert.equal(response.tabMuted, true);
 
+  // Both browsers can unload the background context between events.
+  startBackground();
   tabMessages.length = 0;
   await emitTabUpdate({
     status: "loading",
@@ -394,4 +412,10 @@ test("coordinates mute lifecycle, global release, and tab cleanup", async () => 
   }
 
   assert.equal(Object.hasOwn(session, validKey), false);
-});
+}
+
+for (const buildDirectory of ["dist", "dist-firefox"]) {
+  test(`${buildDirectory}: mute lifecycle, background restart, and cleanup`, () =>
+    exerciseMuteLifecycle(buildDirectory)
+  );
+}
