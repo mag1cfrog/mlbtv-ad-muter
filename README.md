@@ -89,9 +89,17 @@ npm test
 validates the Firefox package with Mozilla's `addons-linter`. Background
 integration tests load each package's real entry point and exercise mute ownership,
 manual overrides, background restart, navigation, alarm retries, and cleanup.
-CI runs the same command on pull requests. Build and validation tools are development
-dependencies; the compiled extension has no third-party runtime dependencies
-or bundler.
+Content and popup integration tests also run the built scripts. CI runs the
+same command on pull requests.
+
+Source files use TypeScript imports. The build checks types and uses esbuild
+to produce one script for each entry point: background, content monitor, and
+popup. Build and validation tools are development dependencies; the installed
+extension has no third-party runtime dependencies.
+
+Start with the [source map and runtime flow](docs/architecture.md) when making
+changes. Detection rules, tab-audio operations, and UI rendering have separate
+modules, and shared settings and message types live in `src/shared`.
 
 Run `npm run package:release` to test, build, and write separate versioned
 `-chrome.zip` and `-firefox.zip` packages to `release/`.

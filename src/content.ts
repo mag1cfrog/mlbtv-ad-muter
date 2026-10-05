@@ -1,579 +1,381 @@
-type OverlayElements = Readonly<{
-  status: HTMLDivElement;
-  label: HTMLElement;
-  details: HTMLElement;
-}>;
+import type {
+  DetectorInspection,
+  DetectorPhase,
+  DetectorRefreshMessage,
+  DetectorResponse,
+  DetectorStateMessage,
+  DetectorStateRequest,
+  ExtensionSettings,
+  PlayerClassification,
+  TabAudioStateMessage
+} from "./shared/types.ts";
+import { inspect, SELECTORS } from "./content/detector.ts";
+import { confirmationDelayFor, muteRetryDelay, TIMING_MS } from "./content/timing-policy.ts";
+import { removeOverlay, renderOverlay, showReloadNotice } from "./content/overlay.ts";
+import type { OverlayAudioState } from "./content/overlay.ts";
+import { DEFAULT_SETTINGS, getSettings } from "./shared/settings.ts";
+import { normalizePosition } from "./shared/overlay-policy.ts";
 
-type ContentTabAudioState = {
-  tabMuted: boolean;
-  manualAdOverride: boolean;
-  muteSource: MuteSource;
+const extensionVersion = chrome.runtime.getManifest().version;
+let settings: ExtensionSettings = DEFAULT_SETTINGS;
+
+let stableClassification: PlayerClassification = "unknown";
+let candidateClassification: PlayerClassification | null = null;
+let candidateSince = 0;
+let evaluationTimer: number | null = null;
+let muteRetryTimer: number | null = null;
+let muteRetryAttempt = 0;
+let watchdogTimer: number | null = null;
+let lastMessageFingerprint = "";
+let observedTarget: Element | null = null;
+let observedFullscreenTarget: Element | null = null;
+let latestDetectorState: DetectorStateMessage | undefined;
+let monitorStopped = false;
+let tabAudioState: OverlayAudioState = {
+  tabMuted: false,
+  manualAdOverride: false,
+  muteSource: "unknown"
 };
 
-(function startContentMonitor() {
-  "use strict";
+function updateOverlay(): void {
+  renderOverlay({
+    settings,
+    detector: latestDetectorState,
+    audio: tabAudioState,
+    retryAttempt: muteRetryAttempt,
+    version: extensionVersion
+  });
+}
 
-  const extensionGlobals = globalThis as ExtensionGlobals;
-  const detector = extensionGlobals.MlbTvAdMuterDetector;
-  const overlayPolicy = extensionGlobals.MlbTvAdMuterOverlayPolicy;
-  const timingPolicy = extensionGlobals.MlbTvAdMuterTimingPolicy;
-  const extensionVersion = chrome.runtime.getManifest().version;
+function isMuteAcknowledgmentPending(): boolean {
+  return (
+    settings.enabled &&
+    stableClassification === "ad" &&
+    !tabAudioState.tabMuted &&
+    !tabAudioState.manualAdOverride
+  );
+}
 
-  if (!detector || !overlayPolicy || !timingPolicy) {
-    console.error("Ad Muter for MLB.TV: detector dependencies failed to load.");
+function clearMuteRetry(): void {
+  if (muteRetryTimer !== null) {
+    clearTimeout(muteRetryTimer);
+    muteRetryTimer = null;
+  }
+  muteRetryAttempt = 0;
+}
+
+function scheduleMuteRetry(): void {
+  if (
+    monitorStopped ||
+    muteRetryTimer !== null ||
+    !isMuteAcknowledgmentPending()
+  ) {
     return;
   }
 
-  const activeDetector: DetectorPolicy = detector;
-  const activeOverlayPolicy: OverlayPolicy = overlayPolicy;
-  const activeTimingPolicy: TimingPolicy = timingPolicy;
-
-  let stableClassification: PlayerClassification = "unknown";
-  let candidateClassification: PlayerClassification | null = null;
-  let candidateSince = 0;
-  let evaluationTimer: number | null = null;
-  let muteRetryTimer: number | null = null;
-  let muteRetryAttempt = 0;
-  let watchdogTimer: number | null = null;
-  let lastMessageFingerprint = "";
-  let observedTarget: Element | null = null;
-  let observedFullscreenTarget: Element | null = null;
-  let overlayEnabled = false;
-  let overlayPosition: OverlayPosition = activeOverlayPolicy.DEFAULT_POSITION;
-  let autoMuteEnabled = false;
-  let overlayHost: HTMLDivElement | null = null;
-  let overlayElements: OverlayElements | null = null;
-  let latestInspection: DetectorInspection | null = null;
-  let latestDetectorState: DetectorStateMessage | undefined;
-  let latestPhase: DetectorPhase = "stable";
-  let monitorStopped = false;
-  let tabAudioState: ContentTabAudioState = {
-    tabMuted: false,
-    manualAdOverride: false,
-    muteSource: "unknown"
-  };
-
-  function isMuteAcknowledgmentPending(): boolean {
-    return (
-      autoMuteEnabled &&
-      stableClassification === "ad" &&
-      !tabAudioState.tabMuted &&
-      !tabAudioState.manualAdOverride
-    );
-  }
-
-  function clearMuteRetry(): void {
-    if (muteRetryTimer !== null) {
-      clearTimeout(muteRetryTimer);
-      muteRetryTimer = null;
-    }
-    muteRetryAttempt = 0;
-  }
-
-  function scheduleMuteRetry(): void {
-    if (
-      monitorStopped ||
-      muteRetryTimer !== null ||
-      !isMuteAcknowledgmentPending()
-    ) {
-      return;
-    }
-
-    const delayMs = activeTimingPolicy.muteRetryDelay(muteRetryAttempt);
-    muteRetryTimer = setTimeout(() => {
-      muteRetryTimer = null;
-      muteRetryAttempt += 1;
-      lastMessageFingerprint = "";
-      evaluatePlayer();
-    }, delayMs);
-  }
-
-  function reconcileMuteRetry(): void {
-    if (isMuteAcknowledgmentPending()) {
-      scheduleMuteRetry();
-      return;
-    }
-
-    clearMuteRetry();
-  }
-
-  function scheduleEvaluation(
-    delayMs = activeTimingPolicy.TIMING_MS.debounce
-  ): void {
-    if (monitorStopped) {
-      return;
-    }
-
-    if (evaluationTimer !== null) {
-      clearTimeout(evaluationTimer);
-    }
-
-    evaluationTimer = setTimeout(() => {
-      evaluationTimer = null;
-      evaluatePlayer();
-    }, delayMs);
-  }
-
-  function ensureOverlay(): OverlayElements {
-    const mountTarget = activeOverlayPolicy.getMountTarget(document);
-    const position = activeOverlayPolicy.normalizePosition(overlayPosition);
-
-    if (overlayHost?.isConnected && overlayElements) {
-      overlayHost.dataset.position = position;
-      if (overlayHost.parentNode !== mountTarget) {
-        mountTarget.appendChild(overlayHost);
-      }
-      return overlayElements;
-    }
-
-    overlayHost = document.createElement("div");
-    overlayHost.id = "mlbtv-ad-muter-overlay-host";
-    overlayHost.dataset.position = position;
-    const shadow = overlayHost.attachShadow({ mode: "open" });
-    shadow.innerHTML = `
-      <style>
-        :host {
-          all: initial;
-          position: fixed;
-          z-index: 2147483647;
-          pointer-events: none;
-        }
-
-        :host([data-position="top-left"]) {
-          top: 16px;
-          left: 16px;
-        }
-
-        :host([data-position="top-right"]) {
-          top: 16px;
-          right: 16px;
-        }
-
-        :host([data-position="bottom-left"]) {
-          bottom: 16px;
-          left: 16px;
-        }
-
-        :host([data-position="bottom-right"]) {
-          right: 16px;
-          bottom: 16px;
-        }
-
-        .status {
-          display: grid;
-          grid-template-columns: 9px auto;
-          column-gap: 8px;
-          align-items: center;
-          min-width: 142px;
-          border: 1px solid rgba(255, 255, 255, 0.22);
-          border-radius: 10px;
-          background: rgba(15, 23, 42, 0.92);
-          padding: 9px 11px;
-          box-shadow: 0 6px 24px rgba(0, 0, 0, 0.3);
-          color: #f8fafc;
-          font-family: ui-sans-serif, system-ui, -apple-system, sans-serif;
-        }
-
-        .dot {
-          width: 9px;
-          height: 9px;
-          border-radius: 999px;
-          background: #94a3b8;
-        }
-
-        .status[data-state="content"] .dot {
-          background: #22c55e;
-        }
-
-        .status[data-state="ad"] .dot {
-          background: #f59e0b;
-        }
-
-        .status[data-state="candidate"] .dot {
-          background: #38bdf8;
-          animation: pulse 900ms ease-in-out infinite alternate;
-        }
-
-        .status[data-state="error"] .dot {
-          background: #ef4444;
-        }
-
-        strong,
-        small {
-          display: block;
-          grid-column: 2;
-        }
-
-        strong {
-          font-size: 11px;
-          font-weight: 800;
-          letter-spacing: 0.04em;
-        }
-
-        small {
-          margin-top: 2px;
-          color: #cbd5e1;
-          font-size: 9px;
-          line-height: 1.35;
-        }
-
-        @keyframes pulse {
-          from { opacity: 0.4; transform: scale(0.85); }
-          to { opacity: 1; transform: scale(1.15); }
-        }
-      </style>
-      <div class="status" role="status">
-        <span class="dot"></span>
-        <strong></strong>
-        <small></small>
-      </div>
-    `;
-
-    overlayElements = {
-      status: shadow.querySelector<HTMLDivElement>(".status")!,
-      label: shadow.querySelector<HTMLElement>("strong")!,
-      details: shadow.querySelector<HTMLElement>("small")!
-    };
-    mountTarget.appendChild(overlayHost);
-    return overlayElements;
-  }
-
-  function removeOverlay(): void {
-    overlayHost?.remove();
-    overlayHost = null;
-    overlayElements = null;
-  }
-
-  function renderOverlay(): void {
-    if (!overlayEnabled || !latestInspection) {
-      removeOverlay();
-      return;
-    }
-
-    const elements = ensureOverlay();
-    const isCandidate = latestPhase === "candidate";
-    const stable = stableClassification;
-    const raw = latestInspection.classification;
-    const visualState = isCandidate ? "candidate" : stable;
-    const playerAudioState = latestInspection.signals.playerMuted === null
-      ? "unavailable"
-      : latestInspection.signals.playerMuted
-        ? "muted"
-        : "audible";
-    let label = visualState.toUpperCase();
-
-    if (!isCandidate && stable === "ad") {
-      if (tabAudioState.tabMuted) {
-        label = "AD · MUTED";
-      } else if (tabAudioState.manualAdOverride) {
-        label = "AD · OVERRIDE";
-      } else if (muteRetryAttempt > 0) {
-        label = "AD · RETRYING";
-      } else if (autoMuteEnabled) {
-        label = "AD · MUTING";
-      } else {
-        label = "AD · OBSERVE";
-      }
-    }
-
-    elements.status.dataset.state = visualState;
-    elements.label.textContent = label;
-    elements.details.textContent = isCandidate
-      ? `raw: ${raw} · stable: ${stable} · v${extensionVersion}`
-      : `stable: ${stable} · tab: ${
-        tabAudioState.tabMuted ? "muted" : "audible"
-        } · video: ${playerAudioState} · source: ${
-          tabAudioState.muteSource
-        } · v${extensionVersion}`;
-  }
-
-  function stopForInvalidatedContext(): void {
-    if (monitorStopped) {
-      return;
-    }
-
-    monitorStopped = true;
-    if (evaluationTimer !== null) {
-      clearTimeout(evaluationTimer);
-      evaluationTimer = null;
-    }
-    if (watchdogTimer !== null) {
-      clearInterval(watchdogTimer);
-      watchdogTimer = null;
-    }
-    clearMuteRetry();
-    observer.disconnect();
-    fullscreenObserver.disconnect();
-
-    if (overlayEnabled) {
-      const elements = ensureOverlay();
-      elements.status.dataset.state = "error";
-      elements.label.textContent = "RELOAD PAGE";
-      elements.details.textContent =
-        `Extension updated; refresh this tab. · v${extensionVersion}`;
-    } else {
-      removeOverlay();
-    }
-  }
-
-  function handleRuntimeFailure(error: unknown): void {
-    const message = error instanceof Error
-      ? error.message
-      : String(error || "");
-
-    if (message.includes("Extension context invalidated")) {
-      stopForInvalidatedContext();
-      return;
-    }
-
+  const delayMs = muteRetryDelay(muteRetryAttempt);
+  muteRetryTimer = setTimeout(() => {
+    muteRetryTimer = null;
+    muteRetryAttempt += 1;
     lastMessageFingerprint = "";
+    evaluatePlayer();
+  }, delayMs);
+}
+
+function reconcileMuteRetry(): void {
+  if (isMuteAcknowledgmentPending()) {
     scheduleMuteRetry();
+    return;
   }
 
-  function findPlayer(): Element | null {
-    return (
-      document.querySelector(activeDetector.SELECTORS.player) ||
-      document.querySelector(activeDetector.SELECTORS.fallbackPlayer)
-    );
+  clearMuteRetry();
+}
+
+function scheduleEvaluation(
+  delayMs: number = TIMING_MS.debounce
+): void {
+  if (monitorStopped) {
+    return;
   }
 
-  function refreshObserverTarget(): void {
-    const player = findPlayer();
-    const nextTarget =
-      player?.closest(".mlbtv-player") ||
-      player ||
-      document.documentElement;
-
-    if (nextTarget !== observedTarget) {
-      observer.disconnect();
-      observer.observe(nextTarget, {
-        subtree: true,
-        childList: true,
-        attributes: true,
-        attributeFilter: ["aria-label", "class"]
-      });
-      observedTarget = nextTarget;
-    }
-
-    const nextFullscreenTarget =
-      player?.closest(".mlbtv-player") || null;
-
-    if (nextFullscreenTarget === observedFullscreenTarget) {
-      return;
-    }
-
-    fullscreenObserver.disconnect();
-    if (nextFullscreenTarget) {
-      fullscreenObserver.observe(nextFullscreenTarget, {
-        attributes: true,
-        attributeFilter: ["class"]
-      });
-    }
-    observedFullscreenTarget = nextFullscreenTarget;
+  if (evaluationTimer !== null) {
+    clearTimeout(evaluationTimer);
   }
 
-  function publishDetectorState(
-    inspection: DetectorInspection,
-    phase: DetectorPhase
-  ): void {
-    latestInspection = inspection;
-    latestPhase = phase;
-    renderOverlay();
-    reconcileMuteRetry();
+  evaluationTimer = setTimeout(() => {
+    evaluationTimer = null;
+    evaluatePlayer();
+  }, delayMs);
+}
 
-    const payload: DetectorStateMessage = {
-      type: "detector-state",
-      phase,
-      stableClassification,
-      rawClassification: inspection.classification,
-      confidence: inspection.confidence,
-      reason: inspection.reason,
-      signals: inspection.signals
-    };
-    const fingerprint = JSON.stringify(payload);
-    latestDetectorState = payload;
-
-    if (fingerprint === lastMessageFingerprint) {
-      return;
-    }
-
-    lastMessageFingerprint = fingerprint;
-    try {
-      chrome.runtime
-        .sendMessage(payload)
-        .then((response: unknown) => {
-          const message = response as DetectorResponse;
-          if (message?.type === "tab-audio-state") {
-            applyTabAudioState(message);
-          } else if (message?.type === "detector-error") {
-            handleRuntimeFailure(message.error);
-          }
-        })
-        .catch(handleRuntimeFailure);
-    } catch (error) {
-      handleRuntimeFailure(error);
-    }
+function stopForInvalidatedContext(): void {
+  if (monitorStopped) {
+    return;
   }
 
-  function evaluatePlayer(): void {
-    if (monitorStopped) {
-      return;
-    }
+  monitorStopped = true;
+  if (evaluationTimer !== null) {
+    clearTimeout(evaluationTimer);
+    evaluationTimer = null;
+  }
+  if (watchdogTimer !== null) {
+    clearInterval(watchdogTimer);
+    watchdogTimer = null;
+  }
+  clearMuteRetry();
+  observer.disconnect();
+  fullscreenObserver.disconnect();
 
-    refreshObserverTarget();
-    const inspection = activeDetector.inspect(document);
-    const nextClassification = inspection.classification;
-    const now = Date.now();
+  if (settings.showOverlay) {
+    showReloadNotice(settings.overlayPosition, extensionVersion);
+  } else {
+    removeOverlay();
+  }
+}
 
-    if (nextClassification !== candidateClassification) {
-      candidateClassification = nextClassification;
-      candidateSince = now;
-    }
+function handleRuntimeFailure(error: unknown): void {
+  const message = error instanceof Error
+    ? error.message
+    : String(error || "");
 
-    const holdMs = activeTimingPolicy.confirmationDelayFor(inspection);
-    const elapsedMs = now - candidateSince;
+  if (message.includes("Extension context invalidated")) {
+    stopForInvalidatedContext();
+    return;
+  }
 
-    if (
-      nextClassification !== stableClassification &&
-      elapsedMs >= holdMs
-    ) {
-      stableClassification = nextClassification;
-      publishDetectorState(inspection, "stable");
-      return;
-    }
+  lastMessageFingerprint = "";
+  scheduleMuteRetry();
+}
 
-    if (nextClassification !== stableClassification) {
-      publishDetectorState(inspection, "candidate");
-      scheduleEvaluation(Math.max(holdMs - elapsedMs, 50));
-      return;
-    }
+function findPlayer(): Element | null {
+  return (
+    document.querySelector(SELECTORS.player) ||
+    document.querySelector(SELECTORS.fallbackPlayer)
+  );
+}
 
+function refreshObserverTarget(): void {
+  const player = findPlayer();
+  const nextTarget =
+    player?.closest(".mlbtv-player") ||
+    player ||
+    document.documentElement;
+
+  if (nextTarget !== observedTarget) {
+    observer.disconnect();
+    observer.observe(nextTarget, {
+      subtree: true,
+      childList: true,
+      attributes: true,
+      attributeFilter: ["aria-label", "class"]
+    });
+    observedTarget = nextTarget;
+  }
+
+  const nextFullscreenTarget =
+    player?.closest(".mlbtv-player") || null;
+
+  if (nextFullscreenTarget === observedFullscreenTarget) {
+    return;
+  }
+
+  fullscreenObserver.disconnect();
+  if (nextFullscreenTarget) {
+    fullscreenObserver.observe(nextFullscreenTarget, {
+      attributes: true,
+      attributeFilter: ["class"]
+    });
+  }
+  observedFullscreenTarget = nextFullscreenTarget;
+}
+
+function publishDetectorState(
+  inspection: DetectorInspection,
+  phase: DetectorPhase
+): void {
+  const payload: DetectorStateMessage = {
+    type: "detector-state",
+    phase,
+    stableClassification,
+    rawClassification: inspection.classification,
+    confidence: inspection.confidence,
+    reason: inspection.reason,
+    signals: inspection.signals
+  };
+  const fingerprint = JSON.stringify(payload);
+  latestDetectorState = payload;
+  updateOverlay();
+  reconcileMuteRetry();
+
+  if (fingerprint === lastMessageFingerprint) {
+    return;
+  }
+
+  lastMessageFingerprint = fingerprint;
+  try {
+    chrome.runtime
+      .sendMessage(payload)
+      .then((response: unknown) => {
+        const message = response as DetectorResponse;
+        if (message?.type === "tab-audio-state") {
+          applyTabAudioState(message);
+        } else if (message?.type === "detector-error") {
+          handleRuntimeFailure(message.error);
+        }
+      })
+      .catch(handleRuntimeFailure);
+  } catch (error) {
+    handleRuntimeFailure(error);
+  }
+}
+
+function applyTabAudioState(message: TabAudioStateMessage): void {
+  settings = { ...settings, enabled: message.enabled === true };
+  tabAudioState = {
+    tabMuted: message.tabMuted === true,
+    manualAdOverride: message.manualAdOverride === true,
+    muteSource: message.muteSource || "unknown"
+  };
+  reconcileMuteRetry();
+  updateOverlay();
+}
+
+function evaluatePlayer(): void {
+  if (monitorStopped) {
+    return;
+  }
+
+  refreshObserverTarget();
+  const inspection = inspect(document);
+  const nextClassification = inspection.classification;
+  const now = Date.now();
+
+  if (nextClassification !== candidateClassification) {
+    candidateClassification = nextClassification;
+    candidateSince = now;
+  }
+
+  const holdMs = confirmationDelayFor(inspection);
+  const elapsedMs = now - candidateSince;
+
+  if (
+    nextClassification !== stableClassification &&
+    elapsedMs >= holdMs
+  ) {
+    stableClassification = nextClassification;
     publishDetectorState(inspection, "stable");
+    return;
   }
 
-  const observer = new MutationObserver(() => {
-    const explicitAdMarkerPresent =
-      stableClassification !== "ad" &&
-      Boolean(
-        findPlayer()?.querySelector(activeDetector.SELECTORS.adControls)
-      );
+  if (nextClassification !== stableClassification) {
+    publishDetectorState(inspection, "candidate");
+    scheduleEvaluation(Math.max(holdMs - elapsedMs, 50));
+    return;
+  }
 
-    scheduleEvaluation(
-      explicitAdMarkerPresent
-        ? 0
-        : activeTimingPolicy.TIMING_MS.debounce
+  publishDetectorState(inspection, "stable");
+}
+
+const observer = new MutationObserver(() => {
+  const explicitAdMarkerPresent =
+    stableClassification !== "ad" &&
+    Boolean(
+      findPlayer()?.querySelector(SELECTORS.adControls)
     );
-  });
-  const fullscreenObserver = new MutationObserver(() => {
-    if (!overlayEnabled) {
-      return;
-    }
 
-    ensureOverlay();
-    renderOverlay();
-  });
+  scheduleEvaluation(
+    explicitAdMarkerPresent
+      ? 0
+      : TIMING_MS.debounce
+  );
+});
+const fullscreenObserver = new MutationObserver(() => {
+  if (!settings.showOverlay) {
+    return;
+  }
 
-  chrome.storage.onChanged.addListener((changes, areaName) => {
-    if (areaName !== "local") {
-      return;
-    }
+  updateOverlay();
+});
 
-    let shouldEvaluate = false;
+chrome.storage.onChanged.addListener((changes, areaName) => {
+  if (areaName !== "local") {
+    return;
+  }
 
-    if (changes.enabled) {
-      autoMuteEnabled = changes.enabled.newValue === true;
-      lastMessageFingerprint = "";
-      shouldEvaluate = true;
-    }
+  let shouldEvaluate = false;
 
-    if (changes.showOverlay) {
-      overlayEnabled = changes.showOverlay.newValue === true;
-      shouldEvaluate = true;
-    }
+  if (changes.enabled) {
+    settings = { ...settings, enabled: changes.enabled.newValue === true };
+    lastMessageFingerprint = "";
+    shouldEvaluate = true;
+  }
 
-    if (changes.overlayPosition) {
-      overlayPosition = activeOverlayPolicy.normalizePosition(
-        changes.overlayPosition.newValue
-      );
-      renderOverlay();
-    }
+  if (changes.showOverlay) {
+    settings = { ...settings, showOverlay: changes.showOverlay.newValue === true };
+    shouldEvaluate = true;
+  }
 
-    if (shouldEvaluate) {
-      evaluatePlayer();
-    }
-  });
-
-  function applyTabAudioState(message: TabAudioStateMessage): void {
-    autoMuteEnabled = message.enabled === true;
-    tabAudioState = {
-      tabMuted: message.tabMuted === true,
-      manualAdOverride: message.manualAdOverride === true,
-      muteSource: message.muteSource || "unknown"
+  if (changes.overlayPosition) {
+    settings = {
+      ...settings,
+      overlayPosition: normalizePosition(changes.overlayPosition.newValue)
     };
-    reconcileMuteRetry();
-    renderOverlay();
+    updateOverlay();
   }
 
-  chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
-    const runtimeMessage = message as
-      | DetectorRefreshMessage
-      | DetectorStateRequest
-      | TabAudioStateMessage;
+  if (shouldEvaluate) {
+    evaluatePlayer();
+  }
+});
 
-    if (runtimeMessage?.type === "get-detector-state") {
-      sendResponse(latestDetectorState);
-      return false;
-    }
+chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
+  const runtimeMessage = message as
+    | DetectorRefreshMessage
+    | DetectorStateRequest
+    | TabAudioStateMessage;
 
-    if (runtimeMessage?.type === "refresh-detector-state") {
-      lastMessageFingerprint = "";
-      evaluatePlayer();
-      return false;
-    }
-
-    if (runtimeMessage?.type !== "tab-audio-state") {
-      return false;
-    }
-
-    applyTabAudioState(runtimeMessage);
+  if (runtimeMessage?.type === "get-detector-state") {
+    sendResponse(latestDetectorState);
     return false;
-  });
-
-  function handleFullscreenChange(): void {
-    if (!overlayEnabled) {
-      return;
-    }
-
-    ensureOverlay();
-    renderOverlay();
   }
 
-  document.addEventListener("fullscreenchange", handleFullscreenChange);
-  document.addEventListener(
-    "webkitfullscreenchange",
-    handleFullscreenChange
-  );
+  if (runtimeMessage?.type === "refresh-detector-state") {
+    lastMessageFingerprint = "";
+    evaluatePlayer();
+    return false;
+  }
 
-  chrome.storage.local
-    .get({
-      enabled: false,
-      showOverlay: false,
-      overlayPosition: activeOverlayPolicy.DEFAULT_POSITION
-    })
-    .then((storedSettings) => {
-      const settings = storedSettings as ExtensionSettings;
-      autoMuteEnabled = settings.enabled;
-      overlayEnabled = settings.showOverlay;
-      overlayPosition = activeOverlayPolicy.normalizePosition(
-        settings.overlayPosition
-      );
-      renderOverlay();
-    })
-    .catch(handleRuntimeFailure);
+  if (runtimeMessage?.type !== "tab-audio-state") {
+    return false;
+  }
 
-  watchdogTimer = setInterval(
-    evaluatePlayer,
-    activeTimingPolicy.TIMING_MS.watchdog
-  );
-  evaluatePlayer();
-})();
+  applyTabAudioState(runtimeMessage);
+  return false;
+});
+
+function handleFullscreenChange(): void {
+  if (!settings.showOverlay) {
+    return;
+  }
+
+  updateOverlay();
+}
+
+document.addEventListener("fullscreenchange", handleFullscreenChange);
+document.addEventListener(
+  "webkitfullscreenchange",
+  handleFullscreenChange
+);
+
+getSettings()
+  .then((storedSettings) => {
+    settings = storedSettings;
+    updateOverlay();
+  })
+  .catch(handleRuntimeFailure);
+
+watchdogTimer = setInterval(
+  evaluatePlayer,
+  TIMING_MS.watchdog
+);
+evaluatePlayer();

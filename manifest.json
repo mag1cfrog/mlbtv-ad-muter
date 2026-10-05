@@ -17,7 +17,7 @@
     "https://www.mlb.com/tv/*"
   ],
   "background": {
-    "service_worker": "src/background-worker.js"
+    "service_worker": "src/background.js"
   },
   "action": {
     "default_icon": {
@@ -33,9 +33,6 @@
         "https://www.mlb.com/tv/*"
       ],
       "js": [
-        "src/detector.js",
-        "src/overlay-policy.js",
-        "src/timing-policy.js",
         "src/content.js"
       ],
       "run_at": "document_idle"

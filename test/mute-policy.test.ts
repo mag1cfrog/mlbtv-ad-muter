@@ -1,14 +1,20 @@
-"use strict";
-
-const test = require("node:test");
-const assert = require("node:assert/strict");
-const {
+import type {
+  DecideMuteActionInput,
+  PreserveAdMuteInput,
+  RepairUnmuteInput
+} from "../src/background/mute-policy.ts";
+import type {
+  MuteDecision
+} from "../src/shared/types.ts";
+import test from "node:test";
+import assert from "node:assert/strict";
+import {
   classifyMuteSource,
   describeTabMuteState,
   decideMuteAction,
   shouldPreserveAdMuteOnNavigation,
   shouldRepairUnmute
-} = require("../dist/src/mute-policy.js") as MutePolicy;
+} from "../src/background/mute-policy.ts";
 
 function decision(
   overrides: Partial<DecideMuteActionInput> = {}

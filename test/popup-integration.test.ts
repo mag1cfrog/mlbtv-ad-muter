@@ -1,70 +1,8 @@
-"use strict";
-
-const fs = require("node:fs");
-const path = require("node:path");
-const test = require("node:test");
-const assert = require("node:assert/strict");
-const vm = require("node:vm");
-const overlayPolicy = require("../dist/src/overlay-policy.js");
-
-const popupSource = fs.readFileSync(
-  path.join(__dirname, "..", "dist", "src", "popup.js"),
-  "utf8"
-);
-
-const SELECTORS = [
-  "#enabled",
-  "#mode",
-  "#show-overlay",
-  "#overlay-mode",
-  "#overlay-position",
-  "#classification",
-  "#reason",
-  "#status-dot",
-  "#diagnostic-log",
-  "#copy-diagnostics",
-  "#copy-status"
-] as const;
-
-type Selector = typeof SELECTORS[number];
-type ElementListener = () => void | Promise<void>;
-type StorageChangeListener = (
-  changes: Record<string, { newValue?: unknown }>,
-  areaName: string
-) => void;
-type DetectorMessageListener = (
-  message: DetectorStateMessage,
-  sender: { tab: { id: number } }
-) => boolean;
-type TestElement = {
-  checked: boolean;
-  className: string;
-  textContent: string;
-  value: string;
-  addEventListener: (type: string, listener: ElementListener) => void;
-  dispatch: (type: string) => void | Promise<void>;
-};
-
-function createElement(): TestElement {
-  const listeners = new Map<string, ElementListener>();
-
-  return {
-    checked: false,
-    className: "",
-    textContent: "",
-    value: "",
-    addEventListener(type: string, listener: ElementListener) {
-      listeners.set(type, listener);
-    },
-    dispatch(type: string) {
-      const listener = listeners.get(type);
-      if (!listener) {
-        throw new Error(`Missing ${type} listener.`);
-      }
-      return listener();
-    }
-  };
-}
+import test from "node:test";
+import assert from "node:assert/strict";
+import type { DetectorStateMessage, ExtensionSettings } from "../src/shared/types.ts";
+import { loadPopup } from "./helpers/popup.ts";
+import { flush } from "./helpers/clock.ts";
 
 const SETTINGS: ExtensionSettings = {
   enabled: true,
@@ -97,142 +35,6 @@ function detectorState(classification: "ad" | "content"): DetectorStateMessage {
       hasQuality: false,
       hasFullscreen: true
     }
-  };
-}
-
-async function flush() {
-  await new Promise((resolve) => setImmediate(resolve));
-}
-
-async function loadPopup(state: PopupState, liveState?: DetectorStateMessage) {
-  const elements = Object.fromEntries(
-    SELECTORS.map((selector) => [selector, createElement()])
-  ) as Record<Selector, TestElement>;
-  const clipboardWrites: string[] = [];
-  const storageWrites: Array<Record<string, unknown>> = [];
-  const { record: _record, ...initialSettings } = state;
-  let settings = initialSettings;
-  let record = state.record;
-  let readSessionRecord = async (): Promise<TabSessionRecord> => record;
-  let hasActiveTab = true;
-  let readLiveState = async (): Promise<DetectorStateMessage> => {
-    if (!liveState) {
-      throw new Error("Could not establish connection. Receiving end does not exist.");
-    }
-    return liveState;
-  };
-  let storageChangeListener: StorageChangeListener | undefined;
-  let detectorMessageListener: DetectorMessageListener | undefined;
-  const context = vm.createContext({
-    MlbTvAdMuterOverlayPolicy: overlayPolicy,
-    chrome: {
-      runtime: {
-        getManifest() {
-          return {
-            version: "0.1.10"
-          };
-        },
-        // No background message API: the popup must work without a background.
-        onMessage: {
-          addListener(listener: DetectorMessageListener) {
-            detectorMessageListener = listener;
-          }
-        }
-      },
-      storage: {
-        local: {
-          async get(defaults: ExtensionSettings) {
-            return { ...defaults, ...settings };
-          },
-          async set(values: Record<string, unknown>) {
-            storageWrites.push({ ...values });
-            settings = { ...settings, ...values };
-          }
-        },
-        session: {
-          async get(key: string) {
-            assert.equal(key, "tab:7");
-            return { [key]: await readSessionRecord() };
-          }
-        },
-        onChanged: {
-          addListener(listener: StorageChangeListener) {
-            storageChangeListener = listener;
-          }
-        }
-      },
-      tabs: {
-        async query(query: { active: boolean; currentWindow: boolean }) {
-          assert.equal(query.active, true);
-          assert.equal(query.currentWindow, true);
-          return hasActiveTab ? [{ id: 7, mutedInfo: { muted: false } }] : [];
-        },
-        async sendMessage(tabId: number, message: DetectorStateRequest) {
-          assert.equal(tabId, 7);
-          assert.equal(message.type, "get-detector-state");
-          return readLiveState();
-        }
-      }
-    },
-    document: {
-      querySelector(selector: Selector) {
-        return elements[selector];
-      }
-    },
-    navigator: {
-      clipboard: {
-        async writeText(value: string) {
-          clipboardWrites.push(value);
-          throw new Error("Clipboard unavailable");
-        }
-      }
-    }
-  });
-
-  vm.runInContext(popupSource, context);
-  await flush();
-
-  return {
-    clipboardWrites,
-    async dispatchSessionChange(tabId: number) {
-      const listener = storageChangeListener;
-      if (!listener) {
-        throw new Error("Missing storage change listener.");
-      }
-      listener(
-        { [`tab:${tabId}`]: { newValue: {} } },
-        "session"
-      );
-      await flush();
-    },
-    elements,
-    setRecord(nextRecord: TabSessionRecord) {
-      record = nextRecord;
-    },
-    setSessionReader(reader: typeof readSessionRecord) {
-      readSessionRecord = reader;
-    },
-    setLiveReader(reader: typeof readLiveState) {
-      readLiveState = reader;
-    },
-    async broadcastDetectorState(nextState: DetectorStateMessage, tabId = 7) {
-      liveState = nextState;
-      assert.equal(detectorMessageListener?.(nextState, { tab: { id: tabId } }), false);
-      await flush();
-    },
-    async changeSettings(values: Partial<ExtensionSettings>) {
-      settings = { ...settings, ...values };
-      storageChangeListener?.(
-        Object.fromEntries(Object.entries(values).map(([key, newValue]) => [key, { newValue }])),
-        "local"
-      );
-      await flush();
-    },
-    async clearActiveTab() {
-      hasActiveTab = false;
-      await this.dispatchSessionChange(7);
-    },
-    storageWrites
   };
 }
 
@@ -341,7 +143,9 @@ test("keeps saved settings on tabs without a content monitor or active tab", asy
 
 test("clears stale diagnostics on a storage error without resetting saved settings", async () => {
   const popup = await loadPopup({ ...SETTINGS, record: {} }, detectorState("ad"));
-  popup.setSessionReader(async () => { throw new Error("Simulated storage failure"); });
+  popup.setSessionReader(async () => {
+    throw new Error("Simulated storage failure");
+  });
   await popup.dispatchSessionChange(7);
 
   assert.equal(
@@ -368,7 +172,9 @@ test("clears stale diagnostics on a storage error without resetting saved settin
 test("ignores a delayed detector response after a newer refresh", async () => {
   const popup = await loadPopup({ ...SETTINGS, record: {} }, detectorState("content"));
   let finishOldRead!: (state: DetectorStateMessage) => void;
-  popup.setLiveReader(() => new Promise((resolve) => { finishOldRead = resolve; }));
+  popup.setLiveReader(() => new Promise((resolve) => {
+    finishOldRead = resolve;
+  }));
   await popup.dispatchSessionChange(7);
 
   popup.setLiveReader(async () => detectorState("ad"));
@@ -383,7 +189,9 @@ test("ignores a delayed detector response after a newer refresh", async () => {
 test("ignores an older refresh failure after newer state is displayed", async () => {
   const popup = await loadPopup({ ...SETTINGS, record: {} }, detectorState("content"));
   let failOldRead!: (error: Error) => void;
-  popup.setSessionReader(() => new Promise((_resolve, reject) => { failOldRead = reject; }));
+  popup.setSessionReader(() => new Promise((_resolve, reject) => {
+    failOldRead = reject;
+  }));
   await popup.dispatchSessionChange(7);
 
   popup.setSessionReader(async () => ({}));

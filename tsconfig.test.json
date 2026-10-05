@@ -15,7 +15,7 @@
     ]
   },
   "include": [
-    "src/types.d.ts",
+    "src/assets.d.ts",
     "test/**/*.ts"
   ]
 }

@@ -1,13 +1,11 @@
-"use strict";
-
-const test = require("node:test");
-const assert = require("node:assert/strict");
-const {
+import test from "node:test";
+import assert from "node:assert/strict";
+import {
   DEFAULT_POSITION,
   POSITIONS,
   getMountTarget,
   normalizePosition
-} = require("../dist/src/overlay-policy.js") as OverlayPolicy;
+} from "../src/shared/overlay-policy.ts";
 
 function documentFixture(value: object): Document {
   return value as unknown as Document;

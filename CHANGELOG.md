@@ -9,8 +9,19 @@ recorded version.
 ### Added
 
 - Added a Firefox and Zen package with shared detection, mute logic, and UI.
-- Added separate browser startup paths, Firefox manifest validation, and
+- Added browser-specific background declarations, Firefox manifest validation, and
   background lifecycle tests for both packages.
+
+### Changed
+
+- Split background coordination, tab audio, diagnostics, overlay rendering,
+  and popup presentation into modules with explicit TypeScript imports.
+- Centralized shared settings and stored-record access. The popup and overlay
+  use the same detector snapshot.
+- Replaced manual script loading with three esbuild bundles shared by both
+  browser packages. esbuild is a build-only dependency.
+- Separated integration-test browser mocks from the behavior scenarios and
+  documented where to make common changes.
 
 ### Fixed
 
