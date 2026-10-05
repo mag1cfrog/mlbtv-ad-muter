@@ -149,7 +149,7 @@ async function ensureMuted(
   );
 
   if (actualState.tabMuted) {
-    await chrome.alarms?.clear(`${RELEASE_RETRY_PREFIX}${tabId}`);
+    await chrome.alarms.clear(`${RELEASE_RETRY_PREFIX}${tabId}`);
     return {
       ...record,
       ...actualState
@@ -157,7 +157,7 @@ async function ensureMuted(
   }
 
   await chrome.tabs.update(tabId, { muted: true });
-  await chrome.alarms?.clear(`${RELEASE_RETRY_PREFIX}${tabId}`);
+  await chrome.alarms.clear(`${RELEASE_RETRY_PREFIX}${tabId}`);
   return {
     ...record,
     mutedByExtension: true
@@ -169,7 +169,7 @@ async function releaseMute(
   record: TabSessionRecord
 ): Promise<TabSessionRecord> {
   if (!record.mutedByExtension) {
-    await chrome.alarms?.clear(`${RELEASE_RETRY_PREFIX}${tabId}`);
+    await chrome.alarms.clear(`${RELEASE_RETRY_PREFIX}${tabId}`);
     return {
       ...record,
       mutedByExtension: false
@@ -188,13 +188,13 @@ async function releaseMute(
     }
   } catch (error) {
     // Browser alarms survive an idle unload, including after the player is gone.
-    await chrome.alarms?.create(`${RELEASE_RETRY_PREFIX}${tabId}`, {
+    await chrome.alarms.create(`${RELEASE_RETRY_PREFIX}${tabId}`, {
       periodInMinutes: 1
     });
     throw error;
   }
 
-  await chrome.alarms?.clear(`${RELEASE_RETRY_PREFIX}${tabId}`);
+  await chrome.alarms.clear(`${RELEASE_RETRY_PREFIX}${tabId}`);
   return {
     ...record,
     mutedByExtension: false
@@ -527,7 +527,7 @@ async function retryMuteRelease(tabId: number): Promise<void> {
   const record = await getSessionRecord(tabId);
   const alarmName = `${RELEASE_RETRY_PREFIX}${tabId}`;
   if (!record.mutedByExtension) {
-    await chrome.alarms?.clear(alarmName);
+    await chrome.alarms.clear(alarmName);
     return;
   }
 
@@ -536,7 +536,7 @@ async function retryMuteRelease(tabId: number): Promise<void> {
   const tab = tabs.find((candidate) => candidate.id === tabId);
   if (!tab) {
     await chrome.storage.session.remove(sessionKey(tabId));
-    await chrome.alarms?.clear(alarmName);
+    await chrome.alarms.clear(alarmName);
     return;
   }
 
@@ -552,8 +552,7 @@ async function retryMuteRelease(tabId: number): Promise<void> {
   await handleNavigation(tabId, tab.url);
 }
 
-// Keep normal muting available when a temporary install has stale permissions.
-chrome.alarms?.onAlarm.addListener((alarm) => {
+chrome.alarms.onAlarm.addListener((alarm) => {
   if (!alarm.name.startsWith(RELEASE_RETRY_PREFIX)) {
     return;
   }
@@ -645,7 +644,7 @@ chrome.tabs.onRemoved.addListener((tabId) => {
     tabId,
     async () => {
       await chrome.storage.session.remove(sessionKey(tabId));
-      await chrome.alarms?.clear(`${RELEASE_RETRY_PREFIX}${tabId}`);
+      await chrome.alarms.clear(`${RELEASE_RETRY_PREFIX}${tabId}`);
     }
   ).catch(() => {});
 });

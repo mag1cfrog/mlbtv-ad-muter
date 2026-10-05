@@ -224,14 +224,14 @@ async function exerciseMuteLifecycle(buildDirectory: string): Promise<void> {
     }
   };
 
-  function startBackground(withAlarms = true): void {
+  function startBackground(): void {
     const extensionRoot = path.join(__dirname, "..", buildDirectory);
     const manifest = JSON.parse(
       fs.readFileSync(path.join(extensionRoot, "manifest.json"), "utf8")
     ) as { background: { service_worker?: string; scripts?: string[] } };
     const context = vm.createContext({
       URL,
-      chrome: { ...chrome, alarms: withAlarms ? chrome.alarms : undefined },
+      chrome,
       console: {
         debug() {},
         error() {}
@@ -380,16 +380,6 @@ async function exerciseMuteLifecycle(buildDirectory: string): Promise<void> {
     session[`tab:${tabId}`]?.lastDecision,
     "release-navigation-mute"
   );
-
-  // A development reload can see new scripts with the previous permissions.
-  startBackground(false);
-  response = await sendDetectorState("ad");
-  assertAudioState(response);
-  assert.equal(response.tabMuted, true);
-  response = await sendDetectorState("content");
-  assertAudioState(response);
-  assert.equal(response.tabMuted, false);
-  startBackground();
 
   tab.url = "https://www.mlb.com/tv/game";
   await sendDetectorState("ad");

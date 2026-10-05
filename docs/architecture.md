@@ -56,9 +56,6 @@ coordinate browser APIs.
   it requests a fresh detector state so a new ad keeps its mute. Otherwise,
   it retries the release. Successful muting, release, and tab closure cancel
   the alarm; stale closed-tab records are removed.
-  If a development install still has an older manifest without `alarms`,
-  normal muting continues without this fallback. Reload the extension to
-  apply permission changes.
 - A manual unmute is respected for the rest of the current ad pod.
 - Disabling auto-mute or leaving a supported stream releases an
   extension-owned mute.
