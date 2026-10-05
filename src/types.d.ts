@@ -170,6 +170,10 @@ type DetectorRefreshMessage = Readonly<{
   type: "refresh-detector-state";
 }>;
 
+type DetectorStateRequest = Readonly<{
+  type: "get-detector-state";
+}>;
+
 type TabAudioStateMessage = Readonly<{
   type: "tab-audio-state";
   enabled: boolean;
@@ -256,23 +260,11 @@ type TabSessionRecord = {
   debugHistory?: DebugEvent[];
 };
 
-type PopupStateRequest = Readonly<{
-  type: "get-popup-state";
-  tabId: number;
-}>;
-
-type PopupStateResponse = Readonly<ExtensionSettings & {
+type PopupState = Readonly<ExtensionSettings & {
   record: TabSessionRecord;
 }>;
 
-type PopupErrorResponse = Readonly<{ error: string }>;
-
-type PopupRuntimeResponse =
-  | PopupErrorResponse
-  | PopupStateResponse
-  | undefined;
-
-type DiagnosticPopupState = Readonly<PopupStateResponse & {
+type DiagnosticPopupState = Readonly<PopupState & {
   extensionVersion: string;
   generatedAt: string;
   tabId: number;

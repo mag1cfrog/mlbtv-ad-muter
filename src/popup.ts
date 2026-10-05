@@ -20,6 +20,9 @@ const copyStatusElement =
   document.querySelector<HTMLElement>("#copy-status")!;
 let activeTabId: number | null = null;
 let lastPopupState: DiagnosticPopupState | null = null;
+let refreshSequence = 0;
+const popupOverlayPolicy = (globalThis as ExtensionGlobals)
+  .MlbTvAdMuterOverlayPolicy!;
 
 const CLASSIFICATION_LABELS: Readonly<
   Record<PlayerClassification, string>
@@ -81,13 +84,11 @@ function renderDebugHistory(history: readonly DebugEvent[] = []): void {
     .join("\n");
 }
 
-function render({
+function renderSettings({
   enabled,
   showOverlay,
-  overlayPosition = "bottom-right",
-  record = {}
-}: PopupStateResponse): void {
-  const classification = record.stableClassification || "unknown";
+  overlayPosition
+}: ExtensionSettings): void {
   enabledInput.checked = enabled;
   showOverlayInput.checked = showOverlay;
   overlayPositionInput.value = overlayPosition;
@@ -97,6 +98,11 @@ function render({
   overlayModeElement.textContent = showOverlay
     ? "Overlay visible"
     : "Overlay hidden";
+}
+
+function render({ record = {}, ...settings }: PopupState): void {
+  const classification = record.stableClassification || "unknown";
+  renderSettings(settings);
   classificationElement.textContent =
     CLASSIFICATION_LABELS[classification] || "Unknown";
   reasonElement.textContent =
@@ -115,43 +121,78 @@ async function getActiveTab(): Promise<chrome.tabs.Tab | undefined> {
 }
 
 async function refresh(): Promise<void> {
-  const activeTab = await getActiveTab();
+  const sequence = ++refreshSequence;
+  try {
+    const [storedSettings, activeTab] = await Promise.all([
+      chrome.storage.local.get({
+        enabled: false,
+        showOverlay: false,
+        overlayPosition: popupOverlayPolicy.DEFAULT_POSITION
+      }),
+      getActiveTab()
+    ]);
+    if (sequence !== refreshSequence) {
+      return;
+    }
+    const settings = {
+      ...storedSettings,
+      overlayPosition: popupOverlayPolicy.normalizePosition(
+        storedSettings.overlayPosition
+      )
+    } as ExtensionSettings;
+    renderSettings(settings);
 
-  if (typeof activeTab?.id !== "number") {
-    activeTabId = null;
-    render({
-      enabled: false,
-      showOverlay: false,
-      overlayPosition: "bottom-right",
-      record: {}
-    });
-    return;
+    if (typeof activeTab?.id !== "number") {
+      activeTabId = null;
+      lastPopupState = null;
+      render({ ...settings, record: {} });
+      return;
+    }
+
+    activeTabId = activeTab.id;
+    const key = `tab:${activeTab.id}`;
+    const storedState = await chrome.storage.session.get(key);
+    let record: TabSessionRecord = storedState[key] || {};
+    try {
+      const liveState = await chrome.tabs.sendMessage(activeTab.id, {
+        type: "get-detector-state"
+      } satisfies DetectorStateRequest) as DetectorStateMessage | undefined;
+      if (liveState?.type === "detector-state") {
+        const { type: _type, ...detection } = liveState;
+        record = { ...record, ...detection };
+      }
+    } catch {
+      // Tabs outside the supported player do not have a content monitor.
+    }
+    if (sequence !== refreshSequence) {
+      return;
+    }
+
+    const state = {
+      ...settings,
+      record: {
+        ...record,
+        tabMuted: activeTab.mutedInfo?.muted ?? record.tabMuted
+      }
+    };
+    lastPopupState = {
+      extensionVersion: chrome.runtime.getManifest().version,
+      generatedAt: new Date().toISOString(),
+      tabId: activeTab.id,
+      ...state
+    };
+    render(state);
+  } catch (error) {
+    if (sequence === refreshSequence) {
+      handleRefreshError(error);
+    }
   }
-
-  activeTabId = activeTab.id;
-  const response = await chrome.runtime.sendMessage({
-    type: "get-popup-state",
-    tabId: activeTab.id
-  } satisfies PopupStateRequest) as PopupRuntimeResponse;
-
-  if (!response) {
-    throw new Error("The background script did not return popup state.");
-  }
-  if ("error" in response) {
-    throw new Error(response.error);
-  }
-
-  const state = response;
-  lastPopupState = {
-    extensionVersion: chrome.runtime.getManifest().version,
-    generatedAt: new Date().toISOString(),
-    tabId: activeTab.id,
-    ...state
-  };
-  render(state);
 }
 
 function handleRefreshError(error: unknown): void {
+  lastPopupState = null;
+  renderDebugHistory();
+  dotElement.className = "dot unknown";
   classificationElement.textContent = "Unavailable";
   reasonElement.textContent =
     error instanceof Error ? error.message : String(error);
@@ -195,15 +236,20 @@ copyDiagnosticsButton.addEventListener("click", async () => {
 });
 
 chrome.storage.onChanged.addListener((changes, areaName) => {
-  if (
-    areaName !== "session" ||
-    activeTabId === null ||
-    !changes[`tab:${activeTabId}`]
-  ) {
-    return;
+  if (areaName === "local" || (
+    areaName === "session" &&
+    activeTabId !== null &&
+    changes[`tab:${activeTabId}`]
+  )) {
+    refresh();
   }
-
-  refresh().catch(handleRefreshError);
 });
 
-refresh().catch(handleRefreshError);
+chrome.runtime.onMessage.addListener((message, sender) => {
+  if (message?.type === "detector-state" && sender.tab?.id === activeTabId) {
+    refresh();
+  }
+  return false;
+});
+
+refresh();

@@ -44,6 +44,7 @@ type ContentTabAudioState = {
   let overlayHost: HTMLDivElement | null = null;
   let overlayElements: OverlayElements | null = null;
   let latestInspection: DetectorInspection | null = null;
+  let latestDetectorState: DetectorStateMessage | undefined;
   let latestPhase: DetectorPhase = "stable";
   let monitorStopped = false;
   let tabAudioState: ContentTabAudioState = {
@@ -390,6 +391,7 @@ type ContentTabAudioState = {
       signals: inspection.signals
     };
     const fingerprint = JSON.stringify(payload);
+    latestDetectorState = payload;
 
     if (fingerprint === lastMessageFingerprint) {
       return;
@@ -512,10 +514,16 @@ type ContentTabAudioState = {
     renderOverlay();
   }
 
-  chrome.runtime.onMessage.addListener((message) => {
+  chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
     const runtimeMessage = message as
       | DetectorRefreshMessage
+      | DetectorStateRequest
       | TabAudioStateMessage;
+
+    if (runtimeMessage?.type === "get-detector-state") {
+      sendResponse(latestDetectorState);
+      return false;
+    }
 
     if (runtimeMessage?.type === "refresh-detector-state") {
       lastMessageFingerprint = "";

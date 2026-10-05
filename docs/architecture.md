@@ -14,7 +14,10 @@ third-party runtime code.
    to mute, hold, or release. It is the only component that changes tab audio.
 4. The background script stores diagnostics, updates the badge, and returns the
    confirmed tab-audio state to the content monitor.
-5. `popup.ts` reads the active tab state and writes user settings.
+5. `popup.ts` reads settings and diagnostics directly from extension storage
+   and requests the active content monitor's current detector state. It
+   refreshes on detector messages and storage changes, so its classification
+   follows the overlay even if the background is unavailable.
 
 Candidate and unknown states do not immediately restore audio. Stable game
 content ends an extension-owned mute.
@@ -53,6 +56,9 @@ coordinate browser APIs.
   it requests a fresh detector state so a new ad keeps its mute. Otherwise,
   it retries the release. Successful muting, release, and tab closure cancel
   the alarm; stale closed-tab records are removed.
+  If a development install still has an older manifest without `alarms`,
+  normal muting continues without this fallback. Reload the extension to
+  apply permission changes.
 - A manual unmute is respected for the rest of the current ad pod.
 - Disabling auto-mute or leaving a supported stream releases an
   extension-owned mute.

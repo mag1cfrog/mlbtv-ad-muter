@@ -96,8 +96,11 @@ or bundler.
 Run `npm run package:release` to test, build, and write separate versioned
 `-chrome.zip` and `-firefox.zip` packages to `release/`.
 
-After changing extension files, rebuild the project, reload the unpacked
-extension, and reload the stream tab.
+After changing extension files, rebuild the project, reload the extension
+from the browser's extension manager, and refresh the stream tab. Manifest
+and permission changes require that extension reload; refreshing the stream
+alone does not apply them. In Firefox or Zen, use **Reload** on the add-on's
+entry in `about:debugging#/runtime/this-firefox`.
 
 Before releasing, test an actual MLB.TV stream in Chrome and Firefox or Zen:
 enable auto-mute, watch a break and the return to game content, manually

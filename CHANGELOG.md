@@ -14,6 +14,10 @@ recorded version.
 
 ### Fixed
 
+- Kept normal muting working when a development install has not yet loaded
+  the new alarms permission.
+- Loaded popup settings directly from storage and synchronized detection
+  with the content monitor, even when the background is unavailable.
 - Preserved mute ownership when a tab lookup or unmute fails so the content
   monitor can retry restoring audio.
 - Retried failed audio restoration with browser alarms after leaving a

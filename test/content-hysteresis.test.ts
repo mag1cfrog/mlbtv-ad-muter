@@ -7,7 +7,9 @@ const assert = require("node:assert/strict");
 const vm = require("node:vm");
 
 type RuntimeMessageListener = (
-  message: DetectorRefreshMessage | TabAudioStateMessage
+  message: DetectorRefreshMessage | DetectorStateRequest | TabAudioStateMessage,
+  sender?: object,
+  sendResponse?: (state: DetectorStateMessage | undefined) => void
 ) => boolean;
 
 const contentSource = fs.readFileSync(
@@ -250,6 +252,20 @@ test("handles sustained, flickering, and replaced-player transitions", async () 
   await flushPromises();
   assert.equal(stableCount("content"), 2);
 
+  function assertLiveSnapshot(classification: PlayerClassification) {
+    const count = detectorMessages.length;
+    let snapshot: DetectorStateMessage | undefined;
+    requestDetectorRefresh!(
+      { type: "get-detector-state" },
+      {},
+      (state) => { snapshot = state; }
+    );
+    assert.equal(snapshot?.stableClassification, classification);
+    assert.deepEqual(snapshot, detectorMessages.at(-1));
+    assert.equal(detectorMessages.length, count, "Reading state must not trigger another broadcast.");
+  }
+  assertLiveSnapshot("content");
+
   currentClassification = "ad";
   evaluateAfterMutation();
   await advance(5);
@@ -266,6 +282,7 @@ test("handles sustained, flickering, and replaced-player transitions", async () 
   assert.equal(stableCount("ad"), 0);
   await advance(1);
   assert.equal(stableCount("ad"), 1);
+  assertLiveSnapshot("ad");
 
   const contentCountBeforeReturn = stableCount("content");
   currentClassification = "content";
