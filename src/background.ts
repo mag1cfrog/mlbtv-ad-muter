@@ -172,18 +172,15 @@ async function releaseMute(
     };
   }
 
-  try {
-    const tab = await chrome.tabs.get(tabId);
-    const mutedByThisExtension =
-      tab.mutedInfo?.muted &&
-      tab.mutedInfo.reason === "extension" &&
-      tab.mutedInfo.extensionId === chrome.runtime.id;
+  // Failed tab API calls must preserve ownership so later events can retry.
+  const tab = await chrome.tabs.get(tabId);
+  const mutedByThisExtension =
+    tab.mutedInfo?.muted &&
+    tab.mutedInfo.reason === "extension" &&
+    tab.mutedInfo.extensionId === chrome.runtime.id;
 
-    if (mutedByThisExtension) {
-      await chrome.tabs.update(tabId, { muted: false });
-    }
-  } catch {
-    // The tab may have closed between the state transition and this check.
+  if (mutedByThisExtension) {
+    await chrome.tabs.update(tabId, { muted: false });
   }
 
   return {

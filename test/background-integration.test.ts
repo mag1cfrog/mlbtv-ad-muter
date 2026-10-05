@@ -67,6 +67,7 @@ async function exerciseMuteLifecycle(buildDirectory: string): Promise<void> {
   const tabUpdates: boolean[] = [];
   const listeners: TestListeners = {};
   let muteBarrier: MuteBarrier | null = null;
+  let nextTabGetError: Error | null = null;
   let nextTabUpdateError: Error | null = null;
   const settings: {
     enabled: boolean;
@@ -151,6 +152,11 @@ async function exerciseMuteLifecycle(buildDirectory: string): Promise<void> {
     tabs: {
       async get(requestedTabId: number) {
         assert.equal(requestedTabId, tabId);
+        if (nextTabGetError) {
+          const error = nextTabGetError;
+          nextTabGetError = null;
+          throw error;
+        }
         return tab;
       },
       async sendMessage(
@@ -350,6 +356,56 @@ async function exerciseMuteLifecycle(buildDirectory: string): Promise<void> {
     session[`tab:${tabId}`]?.lastDecision,
     "release-navigation-mute"
   );
+
+  tab.url = "https://www.mlb.com/tv/game";
+  await sendDetectorState("ad");
+  nextTabGetError = new Error("Simulated tab lookup failure");
+  response = await sendDetectorState("content");
+  assert.equal(response.type, "detector-error");
+  assert.equal(tab.mutedInfo.muted, true);
+  assert.equal(session[`tab:${tabId}`]?.mutedByExtension, true);
+
+  nextTabUpdateError = new Error("Simulated unmute failure");
+  response = await sendDetectorState("content");
+  assert.equal(response.type, "detector-error");
+  assert.equal(tab.mutedInfo.muted, true);
+  assert.equal(session[`tab:${tabId}`]?.mutedByExtension, true);
+
+  // A failed release must remain retryable across a background restart.
+  startBackground();
+  response = await sendDetectorState("content");
+  assertAudioState(response);
+  assert.equal(response.tabMuted, false);
+  assert.equal(tab.mutedInfo.muted, false);
+  assert.equal(session[`tab:${tabId}`]?.mutedByExtension, false);
+
+  await sendDetectorState("ad");
+  nextTabUpdateError = new Error("Simulated navigation unmute failure");
+  tab.url = unsupportedUrl;
+  await emitTabUpdate({ status: "loading", url: unsupportedUrl });
+  assert.equal(tab.mutedInfo.muted, true);
+  assert.equal(session[`tab:${tabId}`]?.mutedByExtension, true);
+
+  await emitTabUpdate({ status: "loading", url: unsupportedUrl });
+  assert.equal(tab.mutedInfo.muted, false);
+  assert.equal(session[`tab:${tabId}`]?.mutedByExtension, false);
+
+  tab.url = "https://www.mlb.com/tv/game";
+  await sendDetectorState("ad");
+  nextTabUpdateError = new Error("Simulated disable unmute failure");
+  settings.enabled = false;
+  listeners.storageChanged!({ enabled: { newValue: false } }, "local");
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.equal(tab.mutedInfo.muted, true);
+  assert.equal(session[`tab:${tabId}`]?.mutedByExtension, true);
+
+  response = await sendDetectorState("ad");
+  assertAudioState(response);
+  assert.equal(response.enabled, false);
+  assert.equal(response.tabMuted, false);
+  assert.equal(tab.mutedInfo.muted, false);
+  assert.equal(session[`tab:${tabId}`]?.mutedByExtension, false);
+  settings.enabled = true;
 
   for (let index = 0; index < 40; index += 1) {
     await sendDetectorState("content");

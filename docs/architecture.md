@@ -43,6 +43,9 @@ coordinate browser APIs.
 - `chrome.storage.session` keeps one bounded diagnostic record per tab.
 - The background script checks the browser's current mute state before
   changing it and only releases a mute owned by this extension.
+- Failed tab lookups or unmute requests keep the stored mute ownership.
+  Detector errors clear message deduplication so the content monitor's
+  watchdog can retry even when the player state has not changed.
 - A manual unmute is respected for the rest of the current ad pod.
 - Disabling auto-mute or leaving a supported stream releases an
   extension-owned mute.
@@ -83,9 +86,10 @@ features to the shared source files. If a future API needs different behavior
 between browsers, handle that difference at its call site and cover it with
 an integration test.
 
-`npm test` builds both packages, checks types, executes the real Chrome and
-Firefox background entry points in isolated test contexts, and runs Mozilla's
-`addons-linter` with warnings treated as errors. The lifecycle test also
-recreates each background context while preserving session storage to check
-mute recovery after an idle unload. The real-stream release checks in the
-README cover browser behavior and MLB.TV markup that these tests simulate.
+`npm test` builds both packages, checks types, requires the correct background
+configuration for each browser, and executes both entry points in isolated
+test contexts. It also runs Mozilla's `addons-linter` with warnings treated
+as errors. The lifecycle test recreates each background context while
+preserving session storage and verifies recovery after failed tab API calls.
+The real-stream release checks in the README cover browser behavior and
+MLB.TV markup that these tests simulate.

@@ -22,6 +22,21 @@ for (const buildDirectory of ["dist", "dist-firefox"]) {
     assert.equal(manifest.version, packageMetadata.version);
   });
 
+  test(`${buildDirectory}: uses the target browser's background entry point`, () => {
+    assert.equal(manifest.manifest_version, 3);
+    if (buildDirectory === "dist") {
+      assert.equal(manifest.background.service_worker, "src/background-worker.js");
+      assert.equal(manifest.background.scripts, undefined);
+    } else {
+      assert.equal(manifest.background.service_worker, undefined);
+      assert.deepEqual(manifest.background.scripts, [
+        "src/mute-policy.js",
+        "src/overlay-policy.js",
+        "src/background.js"
+      ]);
+    }
+  });
+
   test(`${buildDirectory}: builds every file referenced by the manifest`, () => {
     const backgroundFiles = manifest.background.service_worker
       ? [manifest.background.service_worker]

@@ -12,6 +12,13 @@ recorded version.
 - Added separate browser startup paths, Firefox manifest validation, and
   background lifecycle tests for both packages.
 
+### Fixed
+
+- Preserved mute ownership when a tab lookup or unmute fails so the content
+  monitor can retry restoring audio.
+- Checked each package's background configuration against its target browser
+  so tests reject an invalid Chrome or Firefox startup path.
+
 ## 0.2.4 - 2026-07-25
 
 ### Fixed

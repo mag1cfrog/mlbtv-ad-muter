@@ -11,8 +11,10 @@ const contentSource = fs.readFileSync(
   "utf8"
 );
 
-test("retries ad muting and renders unavailable video audio", async () => {
+test("retries ad muting and failed unmuting with unavailable video audio", async () => {
   const detectorMessages: DetectorStateMessage[] = [];
+  let classification: PlayerClassification = "ad";
+  let watchdog: (() => void) | undefined;
   const overlayDetails = { textContent: "" };
   const overlayHost: {
     dataset: Record<string, string>;
@@ -76,7 +78,7 @@ test("retries ad muting and renders unavailable video audio", async () => {
       },
       inspect() {
         return {
-          classification: "ad",
+          classification,
           confidence: 1,
           reason: "explicit-ad-controls-marker-present",
           signals: {
@@ -127,12 +129,18 @@ test("retries ad muting and renders unavailable video audio", async () => {
         },
         sendMessage(message: DetectorStateMessage) {
           detectorMessages.push(message);
+          if (detectorMessages.length === 3) {
+            return Promise.resolve({
+              type: "detector-error",
+              error: "Simulated unmute failure"
+            });
+          }
           const acknowledged = detectorMessages.length >= 2;
 
           return Promise.resolve({
             type: "tab-audio-state",
             enabled: true,
-            tabMuted: acknowledged,
+            tabMuted: message.stableClassification === "ad" && acknowledged,
             manualAdOverride: false,
             muteSource: acknowledged ? "this-extension" : "unknown"
           });
@@ -157,7 +165,8 @@ test("retries ad muting and renders unavailable video audio", async () => {
     clearTimeout,
     console,
     document: documentRoot,
-    setInterval() {
+    setInterval(callback: () => void) {
+      watchdog = callback;
       return 1;
     },
     setTimeout
@@ -170,4 +179,22 @@ test("retries ad muting and renders unavailable video audio", async () => {
   assert.equal(detectorMessages[0].stableClassification, "ad");
   assert.equal(detectorMessages[1].stableClassification, "ad");
   assert.match(overlayDetails.textContent, /video: unavailable/);
+
+  if (!watchdog) {
+    throw new Error("Expected the content watchdog to be registered.");
+  }
+  classification = "content";
+  watchdog();
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.equal(detectorMessages.length, 3);
+  assert.equal(detectorMessages[2].stableClassification, "content");
+
+  watchdog();
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.equal(detectorMessages.length, 4);
+  assert.deepEqual(detectorMessages[3], detectorMessages[2]);
+  assert.match(overlayDetails.textContent, /stable: content.*tab: audible/);
+
+  watchdog();
+  assert.equal(detectorMessages.length, 4);
 });
