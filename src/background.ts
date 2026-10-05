@@ -17,6 +17,7 @@ const SETTINGS_DEFAULTS: ExtensionSettings = Object.freeze({
   overlayPosition: activeOverlayPolicy.DEFAULT_POSITION
 });
 const DEBUG_HISTORY_LIMIT = 40;
+const RELEASE_RETRY_PREFIX = "release-mute:";
 const tabTaskQueues = new Map<number, Promise<unknown>>();
 
 function sessionKey(tabId: number): string {
@@ -148,6 +149,7 @@ async function ensureMuted(
   );
 
   if (actualState.tabMuted) {
+    await chrome.alarms.clear(`${RELEASE_RETRY_PREFIX}${tabId}`);
     return {
       ...record,
       ...actualState
@@ -155,6 +157,7 @@ async function ensureMuted(
   }
 
   await chrome.tabs.update(tabId, { muted: true });
+  await chrome.alarms.clear(`${RELEASE_RETRY_PREFIX}${tabId}`);
   return {
     ...record,
     mutedByExtension: true
@@ -166,23 +169,32 @@ async function releaseMute(
   record: TabSessionRecord
 ): Promise<TabSessionRecord> {
   if (!record.mutedByExtension) {
+    await chrome.alarms.clear(`${RELEASE_RETRY_PREFIX}${tabId}`);
     return {
       ...record,
       mutedByExtension: false
     };
   }
 
-  // Failed tab API calls must preserve ownership so later events can retry.
-  const tab = await chrome.tabs.get(tabId);
-  const mutedByThisExtension =
-    tab.mutedInfo?.muted &&
-    tab.mutedInfo.reason === "extension" &&
-    tab.mutedInfo.extensionId === chrome.runtime.id;
+  try {
+    const tab = await chrome.tabs.get(tabId);
+    const mutedByThisExtension =
+      tab.mutedInfo?.muted &&
+      tab.mutedInfo.reason === "extension" &&
+      tab.mutedInfo.extensionId === chrome.runtime.id;
 
-  if (mutedByThisExtension) {
-    await chrome.tabs.update(tabId, { muted: false });
+    if (mutedByThisExtension) {
+      await chrome.tabs.update(tabId, { muted: false });
+    }
+  } catch (error) {
+    // Browser alarms survive an idle unload, including after the player is gone.
+    await chrome.alarms.create(`${RELEASE_RETRY_PREFIX}${tabId}`, {
+      periodInMinutes: 1
+    });
+    throw error;
   }
 
+  await chrome.alarms.clear(`${RELEASE_RETRY_PREFIX}${tabId}`);
   return {
     ...record,
     mutedByExtension: false
@@ -511,6 +523,45 @@ async function releaseAllExtensionMutes(): Promise<void> {
   );
 }
 
+async function retryMuteRelease(tabId: number): Promise<void> {
+  const record = await getSessionRecord(tabId);
+  const alarmName = `${RELEASE_RETRY_PREFIX}${tabId}`;
+  if (!record.mutedByExtension) {
+    await chrome.alarms.clear(alarmName);
+    return;
+  }
+
+  // Query confirms a closed tab without mistaking a failed lookup for closure.
+  const tabs = await chrome.tabs.query({});
+  const tab = tabs.find((candidate) => candidate.id === tabId);
+  if (!tab) {
+    await chrome.storage.session.remove(sessionKey(tabId));
+    await chrome.alarms.clear(alarmName);
+    return;
+  }
+
+  const settings = await chrome.storage.local.get(
+    SETTINGS_DEFAULTS
+  ) as ExtensionSettings;
+  if (settings.enabled && isSupportedStreamUrl(tab.url || "")) {
+    // A new stream may be playing an ad. Ask its detector before releasing.
+    await requestDetectorState(tabId);
+    return;
+  }
+
+  await handleNavigation(tabId, tab.url);
+}
+
+chrome.alarms.onAlarm.addListener((alarm) => {
+  if (!alarm.name.startsWith(RELEASE_RETRY_PREFIX)) {
+    return;
+  }
+  const tabId = Number(alarm.name.slice(RELEASE_RETRY_PREFIX.length));
+  if (Number.isInteger(tabId)) {
+    queueTabTask(tabId, () => retryMuteRelease(tabId)).catch(console.error);
+  }
+});
+
 chrome.runtime.onInstalled.addListener(async () => {
   const existing = await chrome.storage.local.get(
     Object.keys(SETTINGS_DEFAULTS)
@@ -618,6 +669,9 @@ chrome.tabs.onUpdated.addListener((tabId, changeInfo) => {
 chrome.tabs.onRemoved.addListener((tabId) => {
   queueTabTask(
     tabId,
-    () => chrome.storage.session.remove(sessionKey(tabId))
+    async () => {
+      await chrome.storage.session.remove(sessionKey(tabId));
+      await chrome.alarms.clear(`${RELEASE_RETRY_PREFIX}${tabId}`);
+    }
   ).catch(() => {});
 });

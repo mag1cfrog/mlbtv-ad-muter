@@ -88,8 +88,8 @@ npm test
 `npm test` builds both packages, checks types, runs the full test suite, and
 validates the Firefox package with Mozilla's `addons-linter`. Background
 integration tests load each package's real entry point and exercise mute ownership,
-manual overrides, background restart, navigation, and cleanup. CI runs the
-same command on pull requests. Build and validation tools are development
+manual overrides, background restart, navigation, alarm retries, and cleanup.
+CI runs the same command on pull requests. Build and validation tools are development
 dependencies; the compiled extension has no third-party runtime dependencies
 or bundler.
 

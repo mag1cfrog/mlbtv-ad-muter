@@ -13,6 +13,7 @@ type MessageListener = (
   sendResponse: (response: TestDetectorResponse) => void
 ) => boolean;
 type TestListeners = Partial<{
+  alarm: (alarm: { name: string }) => void;
   installed: () => void;
   message: MessageListener;
   storageChanged: (
@@ -66,6 +67,7 @@ async function exerciseMuteLifecycle(buildDirectory: string): Promise<void> {
   const tabMessages: unknown[] = [];
   const tabUpdates: boolean[] = [];
   const listeners: TestListeners = {};
+  const alarms = new Map<string, { periodInMinutes: number }>();
   let muteBarrier: MuteBarrier | null = null;
   let nextTabGetError: Error | null = null;
   let nextTabUpdateError: Error | null = null;
@@ -91,6 +93,19 @@ async function exerciseMuteLifecycle(buildDirectory: string): Promise<void> {
   };
 
   const chrome = {
+    alarms: {
+      async create(name: string, alarmInfo: { periodInMinutes: number }) {
+        alarms.set(name, alarmInfo);
+      },
+      async clear(name: string) {
+        return alarms.delete(name);
+      },
+      onAlarm: {
+        addListener(listener: NonNullable<TestListeners["alarm"]>) {
+          listeners.alarm = listener;
+        }
+      }
+    },
     action: {
       async setBadgeBackgroundColor(
         { tabId: badgeTabId }: { tabId: number }
@@ -150,6 +165,9 @@ async function exerciseMuteLifecycle(buildDirectory: string): Promise<void> {
       }
     },
     tabs: {
+      async query() {
+        return [tab];
+      },
       async get(requestedTabId: number) {
         assert.equal(requestedTabId, tabId);
         if (nextTabGetError) {
@@ -260,6 +278,12 @@ async function exerciseMuteLifecycle(buildDirectory: string): Promise<void> {
 
   async function emitTabUpdate(changeInfo: object) {
     listeners.tabUpdated!(tabId, changeInfo);
+    await new Promise((resolve) => setImmediate(resolve));
+  }
+
+  async function emitReleaseRetry(retryTabId = tabId) {
+    assert.ok(listeners.alarm, "The release retry listener must be registered.");
+    listeners.alarm!({ name: `release-mute:${retryTabId}` });
     await new Promise((resolve) => setImmediate(resolve));
   }
 
@@ -386,9 +410,45 @@ async function exerciseMuteLifecycle(buildDirectory: string): Promise<void> {
   assert.equal(tab.mutedInfo.muted, true);
   assert.equal(session[`tab:${tabId}`]?.mutedByExtension, true);
 
-  await emitTabUpdate({ status: "loading", url: unsupportedUrl });
+  assert.equal(alarms.get(`release-mute:${tabId}`)?.periodInMinutes, 1);
+  startBackground();
+  nextTabUpdateError = new Error("Simulated repeated unmute failure");
+  await emitReleaseRetry();
+  assert.equal(tab.mutedInfo.muted, true);
+  assert.equal(alarms.has(`release-mute:${tabId}`), true);
+
+  await emitReleaseRetry();
   assert.equal(tab.mutedInfo.muted, false);
   assert.equal(session[`tab:${tabId}`]?.mutedByExtension, false);
+  assert.equal(alarms.has(`release-mute:${tabId}`), false);
+
+  tab.url = "https://www.mlb.com/tv/game";
+  await sendDetectorState("ad");
+  nextTabUpdateError = new Error("Simulated navigation unmute failure");
+  tab.url = unsupportedUrl;
+  await emitTabUpdate({ status: "loading", url: unsupportedUrl });
+  tab.url = "https://www.mlb.com/tv/another-game";
+  const updatesBeforeRetry = tabUpdates.length;
+  await emitReleaseRetry();
+  assert.equal(tab.mutedInfo.muted, true);
+  assert.equal(tabUpdates.length, updatesBeforeRetry);
+  assert.equal(
+    (tabMessages.at(-1) as DetectorRefreshMessage).type,
+    "refresh-detector-state"
+  );
+  await sendDetectorState("ad");
+  assert.equal(alarms.has(`release-mute:${tabId}`), false);
+
+  nextTabUpdateError = new Error("Simulated navigation unmute failure");
+  tab.url = unsupportedUrl;
+  await emitTabUpdate({ status: "loading", url: unsupportedUrl });
+  tab.mutedInfo = { muted: true, reason: "user" };
+  await emitReleaseRetry();
+  assert.equal(tab.mutedInfo.muted, true);
+  assert.equal(tabUpdates.length, updatesBeforeRetry);
+  assert.equal(session[`tab:${tabId}`]?.mutedByExtension, false);
+  assert.equal(alarms.has(`release-mute:${tabId}`), false);
+  tab.mutedInfo = { muted: false };
 
   tab.url = "https://www.mlb.com/tv/game";
   await sendDetectorState("ad");
@@ -399,12 +459,10 @@ async function exerciseMuteLifecycle(buildDirectory: string): Promise<void> {
   assert.equal(tab.mutedInfo.muted, true);
   assert.equal(session[`tab:${tabId}`]?.mutedByExtension, true);
 
-  response = await sendDetectorState("ad");
-  assertAudioState(response);
-  assert.equal(response.enabled, false);
-  assert.equal(response.tabMuted, false);
+  await emitReleaseRetry();
   assert.equal(tab.mutedInfo.muted, false);
   assert.equal(session[`tab:${tabId}`]?.mutedByExtension, false);
+  assert.equal(alarms.has(`release-mute:${tabId}`), false);
   settings.enabled = true;
 
   for (let index = 0; index < 40; index += 1) {
@@ -445,6 +503,11 @@ async function exerciseMuteLifecycle(buildDirectory: string): Promise<void> {
   assert.equal(tab.mutedInfo.muted, false);
   assert.deepEqual(tabUpdates.slice(-2), [true, false]);
 
+  assert.equal(alarms.has("release-mute:99"), true);
+  await emitReleaseRetry(99);
+  assert.equal(alarms.has("release-mute:99"), false);
+  assert.equal(Object.hasOwn(session, "tab:99"), false);
+
   settings.enabled = true;
   const removalBlockedMute = Promise.withResolvers<void>();
   const removalMuteStarted = Promise.withResolvers<void>();
@@ -455,19 +518,26 @@ async function exerciseMuteLifecycle(buildDirectory: string): Promise<void> {
 
   const pendingRemovedTabAd = sendDetectorState("ad");
   await removalMuteStarted.promise;
+  nextTabUpdateError = new Error("Simulated unmute failure before tab closure");
+  const pendingRemovedTabRelease = sendDetectorState("content");
   listeners.tabRemoved!(tabId);
   removalBlockedMute.resolve();
   await pendingRemovedTabAd;
+  assert.equal((await pendingRemovedTabRelease).type, "detector-error");
 
   for (
     let attempt = 0;
-    attempt < 10 && Object.hasOwn(session, validKey);
+    attempt < 10 && (
+      Object.hasOwn(session, validKey) ||
+      alarms.has(`release-mute:${tabId}`)
+    );
     attempt += 1
   ) {
     await new Promise((resolve) => setImmediate(resolve));
   }
 
   assert.equal(Object.hasOwn(session, validKey), false);
+  assert.equal(alarms.has(`release-mute:${tabId}`), false);
 }
 
 for (const buildDirectory of ["dist", "dist-firefox"]) {

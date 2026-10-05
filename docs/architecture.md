@@ -46,6 +46,13 @@ coordinate browser APIs.
 - Failed tab lookups or unmute requests keep the stored mute ownership.
   Detector errors clear message deduplication so the content monitor's
   watchdog can retry even when the player state has not changed.
+- The `alarms` permission provides a fallback when the content monitor is
+  gone. A failed release schedules a retry every minute, subject to browser
+  scheduling delays. [Browser alarms survive an idle background unload](https://developer.mozilla.org/en-US/docs/Mozilla/Add-ons/WebExtensions/Background_scripts#change_timers_into_alarms).
+  Each retry checks the current tab and settings. On an enabled MLB.TV stream,
+  it requests a fresh detector state so a new ad keeps its mute. Otherwise,
+  it retries the release. Successful muting, release, and tab closure cancel
+  the alarm; stale closed-tab records are removed.
 - A manual unmute is respected for the rest of the current ad pod.
 - Disabling auto-mute or leaving a supported stream releases an
   extension-owned mute.
@@ -90,6 +97,8 @@ an integration test.
 configuration for each browser, and executes both entry points in isolated
 test contexts. It also runs Mozilla's `addons-linter` with warnings treated
 as errors. The lifecycle test recreates each background context while
-preserving session storage and verifies recovery after failed tab API calls.
+preserving session storage and browser alarms. It verifies recovery after
+repeated tab API failures, including after navigation removes the content
+monitor, and checks that delayed retries respect current tab state.
 The real-stream release checks in the README cover browser behavior and
 MLB.TV markup that these tests simulate.

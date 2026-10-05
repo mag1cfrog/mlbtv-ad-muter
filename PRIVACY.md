@@ -12,6 +12,9 @@ The extension:
 - Does not persist game, viewing, advertising, or browsing history.
 - Stores only the user's auto-mute and on-page-overlay preferences in local
   extension storage.
+- Uses browser alarms to retry failed audio restoration after leaving a
+  stream. Retry alarms contain only a tab ID and are cleared when resolved
+  or when the tab closes.
 - Holds the current detection and mute state plus the 40 most recent detector
   or tab-mute transitions in session-only extension storage. Mute sources are
   recorded only as this extension, another extension, the user, tab capture, or

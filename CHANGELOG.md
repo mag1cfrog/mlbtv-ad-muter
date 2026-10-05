@@ -16,6 +16,8 @@ recorded version.
 
 - Preserved mute ownership when a tab lookup or unmute fails so the content
   monitor can retry restoring audio.
+- Retried failed audio restoration with browser alarms after leaving a
+  stream or disabling auto-mute, including across background unloads.
 - Checked each package's background configuration against its target browser
   so tests reject an invalid Chrome or Firefox startup path.
 
