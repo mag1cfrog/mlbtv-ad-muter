@@ -4,7 +4,7 @@ This file records notable changes by extension version. Early versions were not
 tagged, so their entries are reconstructed from commits that changed the
 recorded version.
 
-## Unreleased
+## 0.3.0 - 2026-10-06
 
 ### Added
 
