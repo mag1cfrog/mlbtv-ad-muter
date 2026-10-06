@@ -4,6 +4,36 @@ This file records notable changes by extension version. Early versions were not
 tagged, so their entries are reconstructed from commits that changed the
 recorded version.
 
+## Unreleased
+
+### Added
+
+- Added a Firefox and Zen package with shared detection, mute logic, and UI.
+- Added browser-specific background declarations, Firefox manifest validation, and
+  background lifecycle tests for both packages.
+
+### Changed
+
+- Split background coordination, tab audio, diagnostics, overlay rendering,
+  and popup presentation into modules with explicit TypeScript imports.
+- Centralized shared settings and stored-record access. The popup and overlay
+  use the same detector snapshot.
+- Replaced manual script loading with three esbuild bundles shared by both
+  browser packages. esbuild is a build-only dependency.
+- Separated integration-test browser mocks from the behavior scenarios and
+  documented where to make common changes.
+
+### Fixed
+
+- Loaded popup settings directly from storage and synchronized detection
+  with the content monitor, even when the background is unavailable.
+- Preserved mute ownership when a tab lookup or unmute fails so the content
+  monitor can retry restoring audio.
+- Retried failed audio restoration with browser alarms after leaving a
+  stream or disabling auto-mute, including across background unloads.
+- Checked each package's background configuration against its target browser
+  so tests reject an invalid Chrome or Firefox startup path.
+
 ## 0.2.4 - 2026-07-25
 
 ### Fixed

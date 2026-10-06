@@ -12,9 +12,9 @@
   <strong>No telemetry. No remote code. Zero runtime dependencies.</strong>
 </p>
 
-Ad Muter for MLB.TV is a local-only Chrome extension that mutes the browser
-tab during detected commercial breaks, then restores audio when game content
-returns.
+Ad Muter for MLB.TV is a local-only extension for Chrome, Firefox, and Zen
+that mutes the browser tab during detected commercial breaks, then restores
+audio when game content returns.
 
 Commercials keep playing. The extension does not block requests, skip content,
 modify the stream, or interact with authentication, subscriptions, blackouts,
@@ -26,16 +26,35 @@ or DRM.
 
 [Install from the Chrome Web Store](https://chromewebstore.google.com/detail/ad-muter-for-mlbtv/alombkoifhmcejnfgcdgdphlgpdllodc).
 
-### Load unpacked
+### Build locally
 
 Requires Node.js 22.18 or newer.
 
-1. Run `npm install`.
+1. Run `npm ci`.
 2. Run `npm run build`.
-3. Open `chrome://extensions`.
-4. Enable **Developer mode**.
-5. Select **Load unpacked**.
-6. Choose the generated `dist` directory.
+
+The build creates `dist` for Chrome and `dist-firefox` for Firefox and Zen.
+
+### Load in Chrome
+
+1. Open `chrome://extensions`.
+2. Enable **Developer mode**.
+3. Select **Load unpacked**.
+4. Choose the generated `dist` directory.
+
+### Load in Firefox or Zen
+
+Requires Firefox 142 or newer, or a Zen release based on Firefox 142 or newer.
+
+1. Open `about:debugging#/runtime/this-firefox`.
+2. Select **Load Temporary Add-on**.
+3. Choose `dist-firefox/manifest.json`.
+
+Temporary add-ons are removed when the browser restarts. For a permanent
+installation, the Firefox package must be
+[signed by Mozilla](https://extensionworkshop.com/documentation/publish/signing-and-distribution-overview/),
+either for a public listing or for self-distribution. The local build and
+release ZIP are unsigned.
 
 ## Use
 
@@ -52,7 +71,7 @@ enabled from the popup.
 - Detection checks MLB.TV's on-screen video interface for controls such as
   play, volume, captions, and settings. It does not inspect video frames,
   audio, cookies, or account data.
-- Settings and bounded diagnostics stay in Chrome extension storage.
+- Settings and bounded diagnostics stay in browser extension storage.
 - No data is sent to the developer or any third party.
 - Existing user mute choices and manual unmute overrides are respected.
 - The extension contains no third-party runtime code.
@@ -62,19 +81,39 @@ See the complete [privacy statement](PRIVACY.md).
 ## Development
 
 ```bash
-npm install
+npm ci
 npm test
 ```
 
-`npm test` builds the extension and runs the full test suite. TypeScript and
-type definitions are development-only dependencies; the compiled extension
-has no third-party runtime dependencies or bundler.
+`npm test` builds both packages, checks types, runs the full test suite, and
+validates the Firefox package with Mozilla's `addons-linter`. Background
+integration tests load each package's real entry point and exercise mute ownership,
+manual overrides, background restart, navigation, alarm retries, and cleanup.
+Content and popup integration tests also run the built scripts. CI runs the
+same command on pull requests.
 
-Run `npm run package:release` to test, build, and write a versioned Store ZIP
-to `release/`.
+Source files use TypeScript imports. The build checks types and uses esbuild
+to produce one script for each entry point: background, content monitor, and
+popup. Build and validation tools are development dependencies; the installed
+extension has no third-party runtime dependencies.
 
-After changing extension files, rebuild the project, reload the unpacked
-extension, and reload the stream tab.
+Start with the [source map and runtime flow](docs/architecture.md) when making
+changes. Detection rules, tab-audio operations, and UI rendering have separate
+modules, and shared settings and message types live in `src/shared`.
+
+Run `npm run package:release` to test, build, and write separate versioned
+`-chrome.zip` and `-firefox.zip` packages to `release/`.
+
+After changing extension files, rebuild the project, reload the extension
+from the browser's extension manager, and refresh the stream tab. Manifest
+and permission changes require that extension reload; refreshing the stream
+alone does not apply them. In Firefox or Zen, use **Reload** on the add-on's
+entry in `about:debugging#/runtime/this-firefox`.
+
+Before releasing, test an actual MLB.TV stream in Chrome and Firefox or Zen:
+enable auto-mute, watch a break and the return to game content, manually
+unmute during a break, toggle auto-mute off, and check the overlay in
+fullscreen. Automated tests use simulated player controls and browser APIs.
 
 ## Documentation
 

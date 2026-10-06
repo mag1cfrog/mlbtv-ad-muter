@@ -1,12 +1,13 @@
-"use strict";
-
-const test = require("node:test");
-const assert = require("node:assert/strict");
-const {
+import type {
+  DetectorSignals
+} from "../src/shared/types.ts";
+import test from "node:test";
+import assert from "node:assert/strict";
+import {
   SELECTORS,
   classifySignals,
   collectSignals
-} = require("../dist/src/detector.js") as DetectorPolicy;
+} from "../src/content/detector.ts";
 
 function signals(
   overrides: Partial<DetectorSignals> = {}

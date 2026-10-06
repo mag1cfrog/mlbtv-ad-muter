@@ -1,12 +1,10 @@
-"use strict";
-
-const test = require("node:test");
-const assert = require("node:assert/strict");
-const {
+import test from "node:test";
+import assert from "node:assert/strict";
+import {
   TIMING_MS,
   confirmationDelayFor,
   muteRetryDelay
-} = require("../dist/src/timing-policy.js") as TimingPolicy;
+} from "../src/content/timing-policy.ts";
 
 test("confirms the explicit commercial marker immediately", () => {
   assert.equal(

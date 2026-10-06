@@ -5,17 +5,18 @@
       "ES2022",
       "DOM"
     ],
-    "module": "ES2022",
-    "noEmitOnError": true,
+    "module": "ESNext",
     "noUnusedLocals": true,
     "noUnusedParameters": true,
-    "outDir": "dist",
-    "rootDir": ".",
     "strict": true,
     "target": "ES2022",
     "types": [
       "chrome-types"
-    ]
+    ],
+    "moduleResolution": "Bundler",
+    "allowImportingTsExtensions": true,
+    "noEmit": true,
+    "verbatimModuleSyntax": true
   },
   "include": [
     "src/**/*.ts"

@@ -1,151 +1,46 @@
-"use strict";
+import test from "node:test";
+import assert from "node:assert/strict";
+import type { DetectorStateMessage, ExtensionSettings } from "../src/shared/types.ts";
+import { loadPopup } from "./helpers/popup.ts";
+import { flush } from "./helpers/clock.ts";
 
-const fs = require("node:fs");
-const path = require("node:path");
-const test = require("node:test");
-const assert = require("node:assert/strict");
-const vm = require("node:vm");
-
-const popupSource = fs.readFileSync(
-  path.join(__dirname, "..", "dist", "src", "popup.js"),
-  "utf8"
-);
-
-const SELECTORS = [
-  "#enabled",
-  "#mode",
-  "#show-overlay",
-  "#overlay-mode",
-  "#overlay-position",
-  "#classification",
-  "#reason",
-  "#status-dot",
-  "#diagnostic-log",
-  "#copy-diagnostics",
-  "#copy-status"
-] as const;
-
-type Selector = typeof SELECTORS[number];
-type ElementListener = () => void | Promise<void>;
-type StorageChangeListener = (
-  changes: Record<string, { newValue?: unknown }>,
-  areaName: string
-) => void;
-type TestElement = {
-  checked: boolean;
-  className: string;
-  textContent: string;
-  value: string;
-  addEventListener: (type: string, listener: ElementListener) => void;
-  dispatch: (type: string) => void | Promise<void>;
+const SETTINGS: ExtensionSettings = {
+  enabled: true,
+  showOverlay: true,
+  overlayPosition: "top-left"
 };
 
-function createElement(): TestElement {
-  const listeners = new Map<string, ElementListener>();
-
+function detectorState(classification: "ad" | "content"): DetectorStateMessage {
   return {
-    checked: false,
-    className: "",
-    textContent: "",
-    value: "",
-    addEventListener(type: string, listener: ElementListener) {
-      listeners.set(type, listener);
-    },
-    dispatch(type: string) {
-      const listener = listeners.get(type);
-      if (!listener) {
-        throw new Error(`Missing ${type} listener.`);
-      }
-      return listener();
+    type: "detector-state",
+    phase: "stable",
+    stableClassification: classification,
+    rawClassification: classification,
+    confidence: 1,
+    reason: classification === "ad"
+      ? "explicit-ad-controls-marker-present"
+      : "rich-playback-controls-present",
+    signals: {
+      hasPlayer: true,
+      hasVideo: true,
+      playerMuted: false,
+      hasAdControls: classification === "ad",
+      hasPlayPause: true,
+      hasVolume: true,
+      hasRewind: false,
+      hasFastForward: false,
+      hasSeekSlider: false,
+      hasLivePoint: classification === "content",
+      hasBroadcast: false,
+      hasQuality: false,
+      hasFullscreen: true
     }
-  };
-}
-
-async function loadPopup(response: PopupRuntimeResponse) {
-  const elements = Object.fromEntries(
-    SELECTORS.map((selector) => [selector, createElement()])
-  ) as Record<Selector, TestElement>;
-  const clipboardWrites: string[] = [];
-  const storageWrites: Array<Record<string, unknown>> = [];
-  let runtimeResponse = response;
-  let storageChangeListener: StorageChangeListener | undefined;
-  const context = vm.createContext({
-    chrome: {
-      runtime: {
-        getManifest() {
-          return {
-            version: "0.1.10"
-          };
-        },
-        async sendMessage(message: PopupStateRequest) {
-          assert.equal(message.type, "get-popup-state");
-          assert.equal(message.tabId, 7);
-          return runtimeResponse;
-        }
-      },
-      storage: {
-        local: {
-          async set(values: Record<string, unknown>) {
-            storageWrites.push({ ...values });
-          }
-        },
-        onChanged: {
-          addListener(listener: StorageChangeListener) {
-            storageChangeListener = listener;
-          }
-        }
-      },
-      tabs: {
-        async query(query: { active: boolean; currentWindow: boolean }) {
-          assert.equal(query.active, true);
-          assert.equal(query.currentWindow, true);
-          return [{ id: 7 }];
-        }
-      }
-    },
-    document: {
-      querySelector(selector: Selector) {
-        return elements[selector];
-      }
-    },
-    navigator: {
-      clipboard: {
-        async writeText(value: string) {
-          clipboardWrites.push(value);
-          throw new Error("Clipboard unavailable");
-        }
-      }
-    }
-  });
-
-  vm.runInContext(popupSource, context);
-  await new Promise((resolve) => setImmediate(resolve));
-
-  return {
-    clipboardWrites,
-    dispatchSessionChange(tabId: number) {
-      const listener = storageChangeListener;
-      if (!listener) {
-        throw new Error("Missing storage change listener.");
-      }
-      listener(
-        { [`tab:${tabId}`]: { newValue: {} } },
-        "session"
-      );
-    },
-    elements,
-    setResponse(nextResponse: PopupRuntimeResponse) {
-      runtimeResponse = nextResponse;
-    },
-    storageWrites
   };
 }
 
 test("renders state, persists settings, and reports clipboard failure", async () => {
   const popup = await loadPopup({
-    enabled: true,
-    showOverlay: true,
-    overlayPosition: "top-left",
+    ...SETTINGS,
     record: {
       stableClassification: "ad",
       reason: "explicit-ad-controls-marker-present",
@@ -176,17 +71,11 @@ test("renders state, persists settings, and reports clipboard failure", async ()
     /navigation: preserve-ad-mute/
   );
 
-  popup.setResponse({
-    enabled: true,
-    showOverlay: true,
-    overlayPosition: "top-left",
-    record: {
-      stableClassification: "content",
-      reason: "rich-playback-controls-present"
-    }
+  popup.setRecord({
+    stableClassification: "content",
+    reason: "rich-playback-controls-present"
   });
-  popup.dispatchSessionChange(7);
-  await new Promise((resolve) => setImmediate(resolve));
+  await popup.dispatchSessionChange(7);
 
   assert.equal(elements["#classification"].textContent, "Game content");
   assert.match(elements["#reason"].textContent, /Rich playback/);
@@ -203,25 +92,74 @@ test("renders state, persists settings, and reports clipboard failure", async ()
     { showOverlay: false },
     { overlayPosition: "top-right" }
   ]);
+  assert.equal(elements["#enabled"].checked, false);
+  assert.equal(elements["#show-overlay"].checked, false);
+  assert.equal(elements["#overlay-position"].value, "top-right");
 
   await elements["#copy-diagnostics"].dispatch("click");
   assert.equal(elements["#copy-status"].textContent, "Copy failed.");
   assert.equal(JSON.parse(popup.clipboardWrites[0]).tabId, 7);
 });
 
-test("renders a background error without stale diagnostics", async () => {
+test("uses live detection and saved settings when the background is unavailable", async () => {
   const popup = await loadPopup({
-    error: "Simulated background failure"
+    ...SETTINGS,
+    record: {
+      stableClassification: "content",
+      tabMuted: true
+    }
+  }, detectorState("ad"));
+  const { elements } = popup;
+
+  assert.equal(elements["#enabled"].checked, true);
+  assert.equal(elements["#show-overlay"].checked, true);
+  assert.equal(elements["#classification"].textContent, "Commercial break");
+  await elements["#copy-diagnostics"].dispatch("click");
+  assert.equal(JSON.parse(popup.clipboardWrites[0]).record.tabMuted, false);
+
+  await popup.broadcastDetectorState(detectorState("content"), 8);
+  assert.equal(elements["#classification"].textContent, "Commercial break");
+  await popup.broadcastDetectorState(detectorState("content"));
+  assert.equal(elements["#classification"].textContent, "Game content");
+
+  await popup.changeSettings({ showOverlay: false, overlayPosition: "top-right" });
+  assert.equal(elements["#show-overlay"].checked, false);
+  assert.equal(elements["#overlay-position"].value, "top-right");
+});
+
+test("keeps saved settings on tabs without a content monitor or active tab", async () => {
+  const popup = await loadPopup({ ...SETTINGS, record: {} });
+  assert.equal(popup.elements["#enabled"].checked, true);
+  assert.equal(popup.elements["#show-overlay"].checked, true);
+  assert.equal(popup.elements["#classification"].textContent, "Unknown");
+
+  await popup.clearActiveTab();
+  assert.equal(popup.elements["#enabled"].checked, true);
+  assert.equal(popup.elements["#show-overlay"].checked, true);
+  assert.equal(popup.elements["#classification"].textContent, "Unknown");
+  await popup.elements["#copy-diagnostics"].dispatch("click");
+  assert.equal(popup.elements["#copy-status"].textContent, "Nothing to copy yet.");
+});
+
+test("clears stale diagnostics on a storage error without resetting saved settings", async () => {
+  const popup = await loadPopup({ ...SETTINGS, record: {} }, detectorState("ad"));
+  popup.setSessionReader(async () => {
+    throw new Error("Simulated storage failure");
   });
+  await popup.dispatchSessionChange(7);
 
   assert.equal(
     popup.elements["#classification"].textContent,
     "Unavailable"
   );
-  assert.equal(
+  assert.match(
     popup.elements["#reason"].textContent,
-    "Simulated background failure"
+    /Simulated storage failure/
   );
+  assert.equal(popup.elements["#enabled"].checked, true);
+  assert.equal(popup.elements["#show-overlay"].checked, true);
+  assert.equal(popup.elements["#status-dot"].className, "dot unknown");
+  assert.equal(popup.elements["#diagnostic-log"].textContent, "No transitions recorded yet.");
 
   await popup.elements["#copy-diagnostics"].dispatch("click");
   assert.equal(
@@ -229,4 +167,39 @@ test("renders a background error without stale diagnostics", async () => {
     "Nothing to copy yet."
   );
   assert.deepEqual(popup.clipboardWrites, []);
+});
+
+test("ignores a delayed detector response after a newer refresh", async () => {
+  const popup = await loadPopup({ ...SETTINGS, record: {} }, detectorState("content"));
+  let finishOldRead!: (state: DetectorStateMessage) => void;
+  popup.setLiveReader(() => new Promise((resolve) => {
+    finishOldRead = resolve;
+  }));
+  await popup.dispatchSessionChange(7);
+
+  popup.setLiveReader(async () => detectorState("ad"));
+  await popup.broadcastDetectorState(detectorState("ad"));
+  assert.equal(popup.elements["#classification"].textContent, "Commercial break");
+
+  finishOldRead(detectorState("content"));
+  await flush();
+  assert.equal(popup.elements["#classification"].textContent, "Commercial break");
+});
+
+test("ignores an older refresh failure after newer state is displayed", async () => {
+  const popup = await loadPopup({ ...SETTINGS, record: {} }, detectorState("content"));
+  let failOldRead!: (error: Error) => void;
+  popup.setSessionReader(() => new Promise((_resolve, reject) => {
+    failOldRead = reject;
+  }));
+  await popup.dispatchSessionChange(7);
+
+  popup.setSessionReader(async () => ({}));
+  await popup.broadcastDetectorState(detectorState("ad"));
+  failOldRead(new Error("Outdated storage failure"));
+  await flush();
+
+  assert.equal(popup.elements["#classification"].textContent, "Commercial break");
+  await popup.elements["#copy-diagnostics"].dispatch("click");
+  assert.equal(JSON.parse(popup.clipboardWrites[0]).record.stableClassification, "ad");
 });
